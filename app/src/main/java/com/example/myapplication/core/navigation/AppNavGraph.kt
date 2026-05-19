@@ -7,7 +7,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.myapplication.presentation.attendance.AttendanceScreen
-import com.example.myapplication.presentation.grades.GradeDetailPlaceholderScreen
 import com.example.myapplication.presentation.grades.GradeDetailScreen
 import com.example.myapplication.presentation.grades.GradesScreenRoute
 import com.example.myapplication.presentation.home.HomeScreen
