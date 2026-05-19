@@ -222,6 +222,8 @@ private fun GradesScreenContent(
                     Text("Enviar boletín")
                 }
             }
+
+
         }
     }
 }

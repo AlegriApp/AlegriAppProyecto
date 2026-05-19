@@ -6,8 +6,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.myapplication.presentation.attendance.AttendanceScreen
+import com.example.myapplication.presentation.grades.GradeDetailPlaceholderScreen
 import com.example.myapplication.presentation.grades.GradeDetailScreen
 import com.example.myapplication.presentation.grades.GradesScreenRoute
+import com.example.myapplication.presentation.home.HomeScreen
 
 @Composable
 fun AppNavGraph() {
@@ -15,8 +18,21 @@ fun AppNavGraph() {
 
     NavHost(
         navController = navController,
-        startDestination = AppRoutes.Grades
+        startDestination = AppRoutes.Home
     ) {
+        composable(AppRoutes.Home) {
+            HomeScreen(
+                onOpenAttendance = { navController.navigate(AppRoutes.Attendance) },
+                onOpenGrades = { navController.navigate(AppRoutes.Grades) }
+            )
+        }
+
+        composable(AppRoutes.Attendance) {
+            AttendanceScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
         composable(AppRoutes.Grades) {
             GradesScreenRoute(
                 onBack = { navController.popBackStack() },
@@ -25,6 +41,7 @@ fun AppNavGraph() {
                 }
             )
         }
+
         composable(
             route = AppRoutes.GradeDetail,
             arguments = listOf(navArgument("studentId") { type = NavType.LongType })
