@@ -1,6 +1,8 @@
 package com.example.myapplication.core.navigation
 
 object AppRoutes {
+    const val Home = "home"
+    const val Attendance = "attendance"
     const val Grades = "grades"
     const val GradeDetail = "grades_detail/{studentId}"
 
