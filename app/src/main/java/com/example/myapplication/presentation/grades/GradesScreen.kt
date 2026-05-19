@@ -1,13 +1,11 @@
 package com.example.myapplication.presentation.grades
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -228,87 +226,10 @@ private fun GradesScreenContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun GradeDetailPlaceholderScreen(
-    studentId: Long,
-    selectedSubject: String,
-    selectedPeriod: String,
-    onBack: () -> Unit = {}
-) {
-    val studentName = gradesMockStudents.firstOrNull { it.id == studentId }?.name ?: "Estudiante"
-
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Detalle de calificaciones") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Volver"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(24.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalAlignment = Alignment.Start
-            ) {
-                Text(
-                    text = "Detalle de calificaciones",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text("Estudiante: $studentName")
-                Text("Materia: $selectedSubject")
-                Text("Periodo: $selectedPeriod")
-                Text(
-                    text = "Vista de detalle pendiente de lógica",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(onClick = onBack) {
-                    Text("Volver")
-                }
-            }
-        }
-    }
-}
-
 @Preview(showBackground = true)
 @Composable
 private fun GradesScreenPreview() {
     MyApplicationTheme {
         GradesScreen()
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun GradeDetailPlaceholderPreview() {
-    MyApplicationTheme {
-        GradeDetailPlaceholderScreen(
-            studentId = 1L,
-            selectedSubject = "Matemáticas",
-            selectedPeriod = "1er Lapso"
-        )
     }
 }
