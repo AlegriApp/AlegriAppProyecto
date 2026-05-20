@@ -5,22 +5,21 @@ import com.example.myapplication.domain.model.Student
 
 fun StudentEntity.toDomain(): Student = Student(
     id = id,
-    firstName = firstName,
-    lastName = lastName,
-    gradeSection = gradeSection,
+    fullName = fullName,
+    grade = grade,
+    section = section,
     representativeName = representativeName,
-    representativePhone = representativePhone,
-    representativeChatId = representativeChatId,
-    isActive = isActive
+    telegramChatId = telegramChatId
 )
 
 fun Student.toEntity(): StudentEntity = StudentEntity(
     id = id,
-    firstName = firstName,
-    lastName = lastName,
-    gradeSection = gradeSection,
+    fullName = fullName,
+    grade = grade,
+    section = section,
     representativeName = representativeName,
-    representativePhone = representativePhone,
-    representativeChatId = representativeChatId,
-    isActive = isActive
+    telegramChatId = telegramChatId
 )
+
+fun List<StudentEntity>.toDomainList(): List<Student> = map(StudentEntity::toDomain)
+fun List<Student>.toEntityList(): List<StudentEntity> = map(Student::toEntity)

@@ -5,6 +5,5 @@ data class Attendance(
     val studentId: Long,
     val date: String,
     val status: AttendanceStatus,
-    val synced: Boolean = false,
-    val updatedAt: Long = System.currentTimeMillis()
+    val synced: Boolean = false
 )

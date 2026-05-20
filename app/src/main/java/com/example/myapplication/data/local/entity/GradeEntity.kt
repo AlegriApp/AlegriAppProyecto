@@ -1,12 +1,17 @@
 package com.example.myapplication.data.local.entity
 
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "grades")
 data class GradeEntity(
-    val id: Long = 0L,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val studentId: Long,
     val subject: String,
     val period: String,
-    val activity: String,
-    val score: Double? = null,
-    val synced: Boolean = false,
-    val updatedAt: Long = System.currentTimeMillis()
+    val activityName: String,
+    val activityType: String,
+    val score: Double,
+    val maxScore: Double,
+    val synced: Boolean = false
 )

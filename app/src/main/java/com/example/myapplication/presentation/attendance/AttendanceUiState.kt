@@ -1,28 +1,59 @@
 package com.example.myapplication.presentation.attendance
 
 import androidx.compose.runtime.saveable.listSaver
+import com.example.myapplication.domain.model.AttendanceStatus as DomainAttendanceStatus
+import com.example.myapplication.domain.model.Student
 
 data class AttendanceUiState(
     val screenTitle: String = "Toma de Asistencia",
     val dateLabel: String = "Fecha: miércoles, 6 de mayo de 2026",
+    val selectedDate: String = "2026-05-06",
     val courseName: String = "5to Grado Sección A",
     val students: List<AttendanceStudentUi> = emptyList(),
-    val statusByStudent: Map<Long, AttendanceStatus> = emptyMap(),
+    val attendanceByStudent: Map<Long, AttendanceStatus> = emptyMap(),
+    val presentCount: Int = 0,
+    val lateCount: Int = 0,
+    val absentCount: Int = 0,
+    val unmarkedCount: Int = 0,
     val isLoading: Boolean = false,
+    val isSaving: Boolean = false,
+    val isSending: Boolean = false,
+    val successMessage: String? = null,
     val errorMessage: String? = null,
+    val isOffline: Boolean = false,
     val reportPreview: AttendanceReportPreview? = null
 ) {
+    val statusByStudent: Map<Long, AttendanceStatus>
+        get() = attendanceByStudent
+
     val summary: AttendanceSummary
-        get() = AttendanceSummary.from(students, statusByStudent)
+        get() = AttendanceSummary(
+            presentCount = presentCount,
+            lateCount = lateCount,
+            absentCount = absentCount,
+            unmarkedCount = unmarkedCount
+        )
 
     val registeredCount: Int
         get() = summary.registeredCount
 
     fun withSelectedStatus(studentId: Long, status: AttendanceStatus): AttendanceUiState {
-        val updatedStatuses = statusByStudent.toMutableMap().apply {
+        val updatedStatuses = attendanceByStudent.toMutableMap().apply {
             this[studentId] = status
         }
-        return copy(statusByStudent = updatedStatuses)
+        return copy(attendanceByStudent = updatedStatuses).recalculateSummary()
+    }
+
+    fun recalculateSummary(): AttendanceUiState {
+        val statusValues = students.map { student ->
+            attendanceByStudent[student.id] ?: AttendanceStatus.UNMARKED
+        }
+        return copy(
+            presentCount = statusValues.count { it == AttendanceStatus.PRESENT },
+            lateCount = statusValues.count { it == AttendanceStatus.LATE },
+            absentCount = statusValues.count { it == AttendanceStatus.ABSENT },
+            unmarkedCount = statusValues.count { it == AttendanceStatus.UNMARKED }
+        )
     }
 
     companion object {
@@ -31,24 +62,33 @@ data class AttendanceUiState(
                 listOf(
                     state.screenTitle,
                     state.dateLabel,
+                    state.selectedDate,
                     state.courseName,
                     state.students.flatMap { student ->
                         listOf(student.id, student.name, student.gradeSection)
                     },
-                    state.statusByStudent.flatMap { (studentId, status) ->
+                    state.attendanceByStudent.flatMap { (studentId, status) ->
                         listOf(studentId, status.name)
                     },
                     state.isLoading,
+                    state.isSaving,
+                    state.isSending,
+                    state.presentCount,
+                    state.lateCount,
+                    state.absentCount,
+                    state.unmarkedCount,
+                    state.successMessage ?: "",
                     state.errorMessage ?: ""
                 )
             },
             restore = { restored ->
-                val flattenedStudents = restored[3] as List<*>
-                val flattenedStatuses = restored[4] as List<*>
+                val flattenedStudents = restored[4] as List<*>
+                val flattenedStatuses = restored[5] as List<*>
                 AttendanceUiState(
                     screenTitle = restored[0] as String,
                     dateLabel = restored[1] as String,
-                    courseName = restored[2] as String,
+                    selectedDate = restored[2] as String,
+                    courseName = restored[3] as String,
                     students = flattenedStudents.chunked(3).map { studentFields ->
                         AttendanceStudentUi(
                             id = studentFields[0] as Long,
@@ -56,13 +96,20 @@ data class AttendanceUiState(
                             gradeSection = studentFields[2] as String
                         )
                     },
-                    statusByStudent = flattenedStatuses.chunked(2).associate { statusFields ->
+                    attendanceByStudent = flattenedStatuses.chunked(2).associate { statusFields ->
                         val studentId = statusFields[0] as Long
                         val status = AttendanceStatus.valueOf(statusFields[1] as String)
                         studentId to status
                     },
-                    isLoading = restored[5] as Boolean,
-                    errorMessage = (restored[6] as String).takeIf { it.isNotBlank() }
+                    isLoading = restored[6] as Boolean,
+                    isSaving = restored[7] as Boolean,
+                    isSending = restored[8] as Boolean,
+                    presentCount = restored[9] as Int,
+                    lateCount = restored[10] as Int,
+                    absentCount = restored[11] as Int,
+                    unmarkedCount = restored[12] as Int,
+                    successMessage = (restored[13] as String).takeIf { it.isNotBlank() },
+                    errorMessage = (restored[14] as String).takeIf { it.isNotBlank() }
                 )
             }
         )
@@ -74,13 +121,6 @@ data class AttendanceStudentUi(
     val name: String,
     val gradeSection: String
 )
-
-enum class AttendanceStatus {
-    PRESENT,
-    LATE,
-    ABSENT,
-    UNMARKED
-}
 
 data class AttendanceSummary(
     val presentCount: Int,
@@ -123,6 +163,11 @@ data class AttendanceReportEntry(
     val status: AttendanceStatus
 )
 
+data class AttendanceStudent(
+    val student: Student,
+    val status: AttendanceStatus = AttendanceStatus.UNMARKED
+)
+
 fun attendanceMockUiState(): AttendanceUiState = AttendanceUiState(
     students = listOf(
         AttendanceStudentUi(id = 1L, name = "María González", gradeSection = "5to A"),
@@ -132,5 +177,7 @@ fun attendanceMockUiState(): AttendanceUiState = AttendanceUiState(
         AttendanceStudentUi(id = 5L, name = "Sofía López", gradeSection = "5to A"),
         AttendanceStudentUi(id = 6L, name = "Diego Sánchez", gradeSection = "5to A")
     ),
-    statusByStudent = emptyMap()
-)
+    attendanceByStudent = emptyMap()
+).recalculateSummary()
+
+typealias AttendanceStatus = DomainAttendanceStatus
