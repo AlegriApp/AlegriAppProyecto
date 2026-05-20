@@ -8,10 +8,11 @@ fun GradeEntity.toDomain(): Grade = Grade(
     studentId = studentId,
     subject = subject,
     period = period,
-    activity = activity,
+    activityName = activityName,
+    activityType = activityType,
     score = score,
-    synced = synced,
-    updatedAt = updatedAt
+    maxScore = maxScore,
+    synced = synced
 )
 
 fun Grade.toEntity(): GradeEntity = GradeEntity(
@@ -19,8 +20,9 @@ fun Grade.toEntity(): GradeEntity = GradeEntity(
     studentId = studentId,
     subject = subject,
     period = period,
-    activity = activity,
+    activityName = activityName,
+    activityType = activityType,
     score = score,
-    synced = synced,
-    updatedAt = updatedAt
+    maxScore = maxScore,
+    synced = synced
 )

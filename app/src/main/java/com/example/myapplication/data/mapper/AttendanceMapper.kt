@@ -9,8 +9,7 @@ fun AttendanceEntity.toDomain(): Attendance = Attendance(
     studentId = studentId,
     date = date,
     status = status.toAttendanceStatus(),
-    synced = synced,
-    updatedAt = updatedAt
+    synced = synced
 )
 
 fun Attendance.toEntity(): AttendanceEntity = AttendanceEntity(
@@ -18,8 +17,7 @@ fun Attendance.toEntity(): AttendanceEntity = AttendanceEntity(
     studentId = studentId,
     date = date,
     status = status.name,
-    synced = synced,
-    updatedAt = updatedAt
+    synced = synced
 )
 
 private fun String.toAttendanceStatus(): AttendanceStatus =

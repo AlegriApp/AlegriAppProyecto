@@ -1,12 +1,14 @@
 package com.example.myapplication.data.local.entity
 
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "students")
 data class StudentEntity(
-    val id: Long,
-    val firstName: String,
-    val lastName: String,
-    val gradeSection: String,
-    val representativeName: String?,
-    val representativePhone: String?,
-    val representativeChatId: String?,
-    val isActive: Boolean = true
+    @PrimaryKey val id: Long,
+    val fullName: String,
+    val grade: String,
+    val section: String,
+    val representativeName: String,
+    val telegramChatId: String?
 )

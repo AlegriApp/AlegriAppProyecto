@@ -1,10 +1,21 @@
 package com.example.myapplication.data.local.dao
 
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
 import com.example.myapplication.data.local.entity.StudentEntity
+import kotlinx.coroutines.flow.Flow
 
+@Dao
 interface StudentDao {
-    suspend fun upsertAll(students: List<StudentEntity>)
-    suspend fun upsert(student: StudentEntity)
-    suspend fun getStudentsBySection(gradeSection: String): List<StudentEntity>
-    suspend fun getAllStudents(): List<StudentEntity>
+
+    @Query("SELECT * FROM students ORDER BY fullName ASC")
+    fun observeStudents(): Flow<List<StudentEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrReplaceStudents(students: List<StudentEntity>)
+
+    @Query("SELECT * FROM students WHERE id = :studentId LIMIT 1")
+    suspend fun getStudentById(studentId: Long): StudentEntity?
 }
