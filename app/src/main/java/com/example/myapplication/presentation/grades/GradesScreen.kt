@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -41,7 +42,6 @@ import com.example.myapplication.presentation.grades.components.GradeFilterSecti
 import com.example.myapplication.presentation.grades.components.GradeStudentCard
 import com.example.myapplication.presentation.grades.components.GradeSummaryCard
 import com.example.myapplication.presentation.grades.components.GradeSummaryIcons
-import com.example.myapplication.presentation.grades.components.GradeVisualStatus
 import com.example.myapplication.presentation.grades.components.gradesMockStudents
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.launch
@@ -52,6 +52,7 @@ fun GradesScreen(
     onOpenDetail: (Long) -> Unit = {}
 ) {
     GradesScreenContent(
+        viewModel = GradesViewModel.mock(),
         onBack = onBack,
         onOpenDetail = { studentId, _, _ -> onOpenDetail(studentId) }
     )
@@ -63,6 +64,7 @@ fun GradesScreenRoute(
     onOpenDetail: (Long, String, String) -> Unit = { _, _, _ -> }
 ) {
     GradesScreenContent(
+        viewModel = GradesViewModel.mock(),
         onBack = onBack,
         onOpenDetail = onOpenDetail
     )
@@ -71,6 +73,7 @@ fun GradesScreenRoute(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GradesScreenContent(
+    viewModel: GradesViewModel,
     onBack: () -> Unit,
     onOpenDetail: (Long, String, String) -> Unit
 ) {
@@ -78,10 +81,13 @@ private fun GradesScreenContent(
     var selectedPeriod by rememberSaveable { mutableStateOf(GradesUiState().selectedPeriod) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val students = gradesMockStudents
-    val average = students.mapNotNull { it.score }.average().takeIf { !it.isNaN() } ?: 0.0
-    val riskCount = students.count { it.status == GradeVisualStatus.AT_RISK }
-    val pendingCount = students.count { it.status == GradeVisualStatus.NOT_REGISTERED }
+    val vmState by viewModel.uiState.collectAsState()
+    val uiState = vmState.copy(
+        selectedSubject = selectedSubject,
+        selectedPeriod = selectedPeriod,
+        students = gradesMockStudents
+    )
+    val students = uiState.students
 
     Scaffold(
         topBar = {
@@ -144,8 +150,14 @@ private fun GradesScreenContent(
                 GradeFilterSection(
                     selectedSubject = selectedSubject,
                     selectedPeriod = selectedPeriod,
-                    onSubjectSelected = { selectedSubject = it },
-                    onPeriodSelected = { selectedPeriod = it }
+                    onSubjectSelected = {
+                        selectedSubject = it
+                        viewModel.onEvent(GradesEvent.SubjectSelected(it))
+                    },
+                    onPeriodSelected = {
+                        selectedPeriod = it
+                        viewModel.onEvent(GradesEvent.PeriodSelected(it))
+                    }
                 )
             }
 
@@ -157,28 +169,28 @@ private fun GradesScreenContent(
                     item {
                         GradeSummaryCard(
                             title = "Promedio sección",
-                            value = String.format("%.1f", average),
+                            value = String.format("%.1f", uiState.sectionAverage),
                             icon = GradeSummaryIcons.Average
                         )
                     }
                     item {
                         GradeSummaryCard(
                             title = "Estudiantes",
-                            value = students.size.toString(),
+                            value = uiState.totalStudents.toString(),
                             icon = GradeSummaryIcons.Students
                         )
                     }
                     item {
                         GradeSummaryCard(
                             title = "En riesgo",
-                            value = riskCount.toString(),
+                            value = uiState.atRiskStudents.toString(),
                             icon = GradeSummaryIcons.Risk
                         )
                     }
                     item {
                         GradeSummaryCard(
                             title = "Boletines pendientes",
-                            value = pendingCount.toString(),
+                            value = uiState.pendingBulletins.toString(),
                             icon = GradeSummaryIcons.Pending
                         )
                     }
@@ -206,6 +218,7 @@ private fun GradesScreenContent(
             item {
                 Button(
                     onClick = {
+                        viewModel.onEvent(GradesEvent.SendBulletinClicked)
                         scope.launch {
                             snackbarHostState.showSnackbar(
                                 "Prototipo visual: envío por Telegram pendiente"
@@ -232,6 +245,10 @@ private fun GradesScreenContent(
 @Composable
 private fun GradesScreenPreview() {
     MyApplicationTheme {
-        GradesScreen()
+        GradesScreenContent(
+            viewModel = GradesViewModel.mock(),
+            onBack = {},
+            onOpenDetail = { _, _, _ -> }
+        )
     }
 }
