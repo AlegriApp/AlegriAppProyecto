@@ -77,7 +77,12 @@ fun GradeStudentCard(
 private fun GradeStudentCardPreview() {
     MyApplicationTheme {
         GradeStudentCard(
-            student = gradesMockStudents.first(),
+            student = GradeStudentMock(
+                id = 1L,
+                name = "Estudiante",
+                score = 18,
+                status = GradeVisualStatus.APPROVED
+            ),
             onOpenDetail = {}
         )
     }

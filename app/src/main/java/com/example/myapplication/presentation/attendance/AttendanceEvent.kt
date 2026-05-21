@@ -1,5 +1,6 @@
 package com.example.myapplication.presentation.attendance
 
+import android.net.Uri
 import com.example.myapplication.domain.model.AttendanceStatus
 
 sealed interface AttendanceEvent {
@@ -12,5 +13,7 @@ sealed interface AttendanceEvent {
     data object ClearMarks : AttendanceEvent
     data object SaveAttendance : AttendanceEvent
     data object SendReport : AttendanceEvent
+    data class OcrImageSelected(val uri: Uri) : AttendanceEvent
+    data object ApplyOcrSuggestions : AttendanceEvent
     data object ClearMessages : AttendanceEvent
 }

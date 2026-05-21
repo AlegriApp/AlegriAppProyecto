@@ -2,33 +2,47 @@ package com.example.myapplication.presentation.attendance
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.net.Uri
+import com.example.myapplication.BuildConfig
+import com.example.myapplication.domain.model.Attendance
 import com.example.myapplication.domain.model.AttendanceStatus
-import com.example.myapplication.domain.model.Student
+import com.example.myapplication.domain.usecase.attendance.GetAttendanceByDateUseCase
+import com.example.myapplication.domain.usecase.ocr.RecognizeTextFromImageUseCase
+import com.example.myapplication.domain.usecase.attendance.SaveAttendanceUseCase
+import com.example.myapplication.domain.usecase.telegram.SendTelegramMessageUseCase
+import com.example.myapplication.services.telegram.TelegramMessageBuilder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 
 class AttendanceViewModel(
-    initialState: AttendanceUiState = attendanceMockUiState()
+    private val getAttendanceByDateUseCase: GetAttendanceByDateUseCase,
+    private val saveAttendanceUseCase: SaveAttendanceUseCase,
+    private val recognizeTextFromImageUseCase: RecognizeTextFromImageUseCase,
+    private val sendTelegramMessageUseCase: SendTelegramMessageUseCase,
+    initialState: AttendanceUiState = AttendanceUiState(
+        isLoading = true,
+        selectedDate = currentDate(),
+        dateLabel = "Fecha: ${currentDateLabel()}"
+    )
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(initialState)
     val uiState: StateFlow<AttendanceUiState> = _uiState.asStateFlow()
+    private var observeJob: Job? = null
 
-    private val mockStudents = listOf(
-        Student(1L, "María González", "5to", "A", "Carmen González", "100001"),
-        Student(2L, "Juan Pérez", "5to", "A", "Luis Pérez", "100002"),
-        Student(3L, "Ana Rodríguez", "5to", "A", "Elena Rodríguez", null),
-        Student(4L, "Carlos Martínez", "5to", "A", "José Martínez", "100004"),
-        Student(5L, "Sofía López", "5to", "A", "Carla López", null),
-        Student(6L, "Diego Sánchez", "5to", "A", "Mario Sánchez", "100006")
-    )
+    init {
+        observeAttendanceForDate(_uiState.value.selectedDate)
+    }
 
     fun onEvent(event: AttendanceEvent) {
         when (event) {
-            AttendanceEvent.LoadStudents -> loadStudents()
+            AttendanceEvent.LoadStudents -> observeAttendanceForDate(_uiState.value.selectedDate)
             is AttendanceEvent.ChangeDate -> changeDate(event.selectedDate)
             is AttendanceEvent.MarkPresent -> updateStatus(event.studentId, AttendanceStatus.PRESENT)
             is AttendanceEvent.MarkLate -> updateStatus(event.studentId, AttendanceStatus.LATE)
@@ -37,35 +51,50 @@ class AttendanceViewModel(
             AttendanceEvent.ClearMarks -> clearMarks()
             AttendanceEvent.SaveAttendance -> saveAttendance()
             AttendanceEvent.SendReport -> sendReport()
+            is AttendanceEvent.OcrImageSelected -> processOcr(event.uri)
+            AttendanceEvent.ApplyOcrSuggestions -> applyOcrSuggestions()
             AttendanceEvent.ClearMessages -> clearMessages()
         }
     }
 
-    private fun loadStudents() {
-        _uiState.update { state ->
-            state.copy(
-                students = mockStudents.map { student ->
+    private fun observeAttendanceForDate(date: String) {
+        observeJob?.cancel()
+        observeJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null) }
+            getAttendanceByDateUseCase(date).collect { records ->
+                val students = records.map { record ->
                     AttendanceStudentUi(
-                        id = student.id,
-                        name = student.fullName,
-                        gradeSection = "${student.grade} ${student.section}"
+                        id = record.student.id,
+                        name = record.student.fullName,
+                        gradeSection = "${record.student.grade} ${record.student.section}"
                     )
-                },
-                courseName = "${mockStudents.first().grade} Grado Sección ${mockStudents.first().section}",
-                isLoading = false
-            ).recalculateSummary()
+                }
+                val statusByStudent = records
+                    .mapNotNull { record ->
+                        record.attendance?.let { attendance ->
+                            attendance.studentId to attendance.status
+                        }
+                    }
+                    .toMap()
+                val courseName = records.firstOrNull()?.student?.let { student ->
+                    "${student.grade} Grado Sección ${student.section}"
+                } ?: "Curso no asignado"
+                _uiState.update { state ->
+                    state.copy(
+                        selectedDate = date,
+                        dateLabel = "Fecha: ${toHumanDate(date)}",
+                        students = students,
+                        attendanceByStudent = statusByStudent,
+                        courseName = courseName,
+                        isLoading = false
+                    ).recalculateSummary()
+                }
+            }
         }
     }
 
     private fun changeDate(selectedDate: String) {
-        _uiState.update { state ->
-            state.copy(
-                selectedDate = selectedDate,
-                dateLabel = "Fecha: $selectedDate",
-                errorMessage = null,
-                successMessage = null
-            )
-        }
+        observeAttendanceForDate(selectedDate)
     }
 
     private fun updateStatus(studentId: Long, status: AttendanceStatus) {
@@ -101,12 +130,44 @@ class AttendanceViewModel(
     private fun saveAttendance() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, errorMessage = null, successMessage = null) }
-            delay(150)
-            _uiState.update { current ->
-                if (current.students.isEmpty()) {
-                    current.copy(isSaving = false, errorMessage = "No hay estudiantes para registrar.")
-                } else {
-                    current.copy(isSaving = false, successMessage = "Asistencia guardada localmente.")
+            val current = _uiState.value
+            if (current.students.isEmpty()) {
+                _uiState.update { it.copy(isSaving = false, errorMessage = "No hay estudiantes para registrar.") }
+                return@launch
+            }
+            val hasUnmarkedStudents = current.students.any { student ->
+                current.attendanceByStudent[student.id] == null ||
+                    current.attendanceByStudent[student.id] == AttendanceStatus.UNMARKED
+            }
+            if (hasUnmarkedStudents) {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        errorMessage = "Debes marcar asistencia de todos los estudiantes antes de guardar."
+                    )
+                }
+                return@launch
+            }
+            runCatching {
+                current.students.forEach { student ->
+                    val status = current.attendanceByStudent[student.id] ?: AttendanceStatus.UNMARKED
+                    saveAttendanceUseCase(
+                        Attendance(
+                            studentId = student.id,
+                            date = current.selectedDate,
+                            status = status,
+                            syncPending = true
+                        )
+                    )
+                }
+            }.onSuccess {
+                _uiState.update { it.copy(isSaving = false, successMessage = "Asistencia guardada correctamente.") }
+            }.onFailure { throwable ->
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        errorMessage = throwable.message ?: "No se pudo guardar la asistencia."
+                    )
                 }
             }
         }
@@ -115,8 +176,21 @@ class AttendanceViewModel(
     private fun sendReport() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSending = true, errorMessage = null, successMessage = null) }
-            delay(150)
             val currentState = _uiState.value
+            val hasUnmarkedStudents = currentState.students.any { student ->
+                currentState.attendanceByStudent[student.id] == null ||
+                    currentState.attendanceByStudent[student.id] == AttendanceStatus.UNMARKED
+            }
+            if (hasUnmarkedStudents) {
+                _uiState.update {
+                    it.copy(
+                        isSending = false,
+                        errorMessage = "No se puede enviar el reporte: hay estudiantes sin marcar."
+                    )
+                }
+                return@launch
+            }
+            delay(100)
             val entries = currentState.students.map { student ->
                 AttendanceReportEntry(
                     studentId = student.id,
@@ -124,17 +198,45 @@ class AttendanceViewModel(
                     status = currentState.attendanceByStudent[student.id] ?: AttendanceStatus.UNMARKED
                 )
             }
+            val reportPreview = AttendanceReportPreview(
+                dateLabel = currentState.dateLabel,
+                courseName = currentState.courseName,
+                totalStudents = currentState.students.size,
+                summary = currentState.summary,
+                entries = entries
+            )
+            val message = TelegramMessageBuilder.buildAttendanceReport(
+                date = currentState.selectedDate,
+                courseName = currentState.courseName,
+                records = currentState.students.map { student ->
+                    val status = currentState.attendanceByStudent[student.id] ?: AttendanceStatus.UNMARKED
+                    val domainAttendance = Attendance(
+                        studentId = student.id,
+                        date = currentState.selectedDate,
+                        status = status
+                    )
+                    val domainStudent = com.example.myapplication.domain.model.Student(
+                        id = student.id,
+                        fullName = student.name,
+                        grade = student.gradeSection,
+                        section = "",
+                        representativeName = ""
+                    )
+                    domainStudent to domainAttendance
+                }
+            )
+            val chatId = BuildConfig.TELEGRAM_DEFAULT_CHAT_ID
+            val sent = sendTelegramMessageUseCase(chatId, message)
             _uiState.update {
                 currentState.copy(
                     isSending = false,
-                    reportPreview = AttendanceReportPreview(
-                        dateLabel = currentState.dateLabel,
-                        courseName = currentState.courseName,
-                        totalStudents = currentState.students.size,
-                        summary = currentState.summary,
-                        entries = entries
-                    ),
-                    successMessage = "Reporte preparado para envío."
+                    reportPreview = reportPreview,
+                    successMessage = if (sent) "Reporte enviado por Telegram."
+                    else "Reporte preparado, pero no se pudo enviar por Telegram."
+                ).copy(
+                    errorMessage = if (!sent) {
+                        "Verifica TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID en local.properties."
+                    } else null
                 )
             }
         }
@@ -142,5 +244,83 @@ class AttendanceViewModel(
 
     private fun clearMessages() {
         _uiState.update { it.copy(errorMessage = null, successMessage = null) }
+    }
+
+    private fun processOcr(uri: Uri) {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isProcessingOcr = true,
+                    errorMessage = null,
+                    successMessage = null
+                )
+            }
+            val result = recognizeTextFromImageUseCase(uri)
+            result.onSuccess { ocr ->
+                _uiState.update {
+                    it.copy(
+                        isProcessingOcr = false,
+                        detectedOcrText = ocr.rawText,
+                        successMessage = "Texto detectado. Revisa y aplica sugerencias."
+                    )
+                }
+            }.onFailure { throwable ->
+                _uiState.update {
+                    it.copy(
+                        isProcessingOcr = false,
+                        errorMessage = throwable.message ?: "No se pudo leer el texto de la imagen."
+                    )
+                }
+            }
+        }
+    }
+
+    private fun applyOcrSuggestions() {
+        val state = _uiState.value
+        if (state.detectedOcrText.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "No hay texto OCR para procesar.") }
+            return
+        }
+        val lines = state.detectedOcrText
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toList()
+        val updates = state.students.associate { student ->
+            student.id to inferStatusFromOcr(student.name, lines)
+        }
+        _uiState.update {
+            it.copy(
+                attendanceByStudent = updates,
+                successMessage = "Sugerencias OCR aplicadas. Verifica antes de guardar."
+            ).recalculateSummary()
+        }
+    }
+
+    private fun inferStatusFromOcr(studentName: String, lines: List<String>): AttendanceStatus {
+        val studentKey = studentName.lowercase()
+        val studentLine = lines.firstOrNull { line ->
+            line.lowercase().contains(studentKey)
+        } ?: return AttendanceStatus.UNMARKED
+        val normalized = studentLine.lowercase()
+        return when {
+            normalized.contains("presente") -> AttendanceStatus.PRESENT
+            normalized.contains("atrasado") || normalized.contains("tarde") -> AttendanceStatus.LATE
+            normalized.contains("justificado") -> AttendanceStatus.JUSTIFIED
+            normalized.contains("ausente") || normalized.contains("falta") -> AttendanceStatus.ABSENT
+            else -> AttendanceStatus.UNMARKED
+        }
+    }
+
+    companion object {
+        private fun currentDate(): String = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+
+        private fun currentDateLabel(): String = toHumanDate(currentDate())
+
+        private fun toHumanDate(date: String): String {
+            val localDate = runCatching { LocalDate.parse(date, DateTimeFormatter.ISO_LOCAL_DATE) }
+                .getOrElse { return date }
+            return localDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+        }
     }
 }

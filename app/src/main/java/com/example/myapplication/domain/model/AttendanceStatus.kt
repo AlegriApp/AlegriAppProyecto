@@ -4,5 +4,6 @@ enum class AttendanceStatus {
     PRESENT,
     LATE,
     ABSENT,
+    JUSTIFIED,
     UNMARKED
 }

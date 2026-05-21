@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,6 +8,12 @@ plugins {
 }
 
 android {
+    val localProperties = Properties().apply {
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.inputStream().use { load(it) }
+        }
+    }
     namespace = "com.example.myapplication"
     compileSdk = 36
 
@@ -17,6 +25,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        val telegramToken = (localProperties.getProperty("TELEGRAM_BOT_TOKEN") ?: "").replace("\"", "\\\"")
+        val telegramChatId = (localProperties.getProperty("TELEGRAM_CHAT_ID") ?: "").replace("\"", "\\\"")
+        buildConfigField("String", "TELEGRAM_BOT_TOKEN", "\"$telegramToken\"")
+        buildConfigField("String", "TELEGRAM_DEFAULT_CHAT_ID", "\"$telegramChatId\"")
     }
 
     buildTypes {
@@ -37,6 +49,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -55,6 +68,11 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.google.mlkit.text.recognition)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.retrofit.core)
+    implementation(libs.retrofit.gson)
+    implementation(libs.okhttp.logging)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

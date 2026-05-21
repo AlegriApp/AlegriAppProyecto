@@ -15,7 +15,7 @@ import com.example.myapplication.data.local.entity.StudentEntity
         AttendanceEntity::class,
         GradeEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

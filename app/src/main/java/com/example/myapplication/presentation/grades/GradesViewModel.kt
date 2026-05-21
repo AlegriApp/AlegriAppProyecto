@@ -1,49 +1,63 @@
 package com.example.myapplication.presentation.grades
 
+import android.net.Uri
+import com.example.myapplication.BuildConfig
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.domain.model.Grade
 import com.example.myapplication.domain.model.Student
+import com.example.myapplication.domain.model.Grade
 import com.example.myapplication.presentation.grades.components.GradeStudentMock
 import com.example.myapplication.presentation.grades.components.GradeVisualStatus
-import com.example.myapplication.presentation.grades.components.gradesMockStudents
-import kotlinx.coroutines.delay
+import com.example.myapplication.domain.usecase.grade.GetGradesBySubjectAndPeriodUseCase
+import com.example.myapplication.domain.usecase.grade.SaveGradeUseCase
+import com.example.myapplication.domain.usecase.ocr.RecognizeTextFromImageUseCase
+import com.example.myapplication.domain.usecase.student.GetStudentsUseCase
+import com.example.myapplication.domain.usecase.telegram.SendTelegramMessageUseCase
+import com.example.myapplication.services.telegram.TelegramMessageBuilder
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 class GradesViewModel(
+    private val getStudentsUseCase: GetStudentsUseCase,
+    private val getGradesBySubjectAndPeriodUseCase: GetGradesBySubjectAndPeriodUseCase,
+    private val saveGradeUseCase: SaveGradeUseCase,
+    private val recognizeTextFromImageUseCase: RecognizeTextFromImageUseCase,
+    private val sendTelegramMessageUseCase: SendTelegramMessageUseCase,
     initialState: GradesUiState = GradesUiState()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(initialState)
     val uiState: StateFlow<GradesUiState> = _uiState.asStateFlow()
+    private var observeJob: Job? = null
 
-    private val mockStudents = listOf(
-        Student(1L, "María González", "5to", "A", "Carmen González", "100001"),
-        Student(2L, "Juan Perez", "5to", "A", "Luis Perez", "100002"),
-        Student(3L, "Ana Rodríguez", "5to", "A", "Elena Rodríguez", null),
-        Student(4L, "Carlos Martínez", "5to", "A", "José Martínez", "100004"),
-        Student(5L, "Sofía López", "5to", "A", "Carla López", null),
-        Student(6L, "Diego Sánchez", "5to", "A", "Mario Sánchez", "100006")
-    )
-
-    private var gradeStore: List<Grade> = mockStudents.map { student ->
-        Grade(
-            studentId = student.id,
-            subject = "Matemáticas",
-            period = "1er Lapso",
-            activityName = "Evaluación 1",
-            activityType = "EXAM",
-            score = gradesMockStudents.firstOrNull { it.id == student.id }?.score?.toDouble() ?: 0.0,
-            maxScore = 20.0,
-            synced = false
-        )
-    }
+    private var gradeStore: List<Grade> = emptyList()
 
     init {
-        loadData()
+        viewModelScope.launch {
+            getStudentsUseCase().collect { students ->
+                val defaultSubject = _uiState.value.selectedSubject.takeIf { it.isNotBlank() } ?: "General"
+                val defaultPeriod = _uiState.value.selectedPeriod.takeIf { it.isNotBlank() } ?: "Actual"
+                _uiState.update {
+                    it.copy(
+                        studentsDomain = students,
+                        students = studentsFromDomain(students),
+                        courseName = students.firstOrNull()?.let { student ->
+                            "${student.grade} Grado Sección ${student.section}"
+                        } ?: "Curso no asignado",
+                        subjects = listOf(defaultSubject),
+                        periods = listOf(defaultPeriod),
+                        selectedSubject = defaultSubject,
+                        selectedPeriod = defaultPeriod,
+                        isLoading = false
+                    )
+                }
+                observeGrades(defaultSubject, defaultPeriod)
+            }
+        }
     }
 
     fun onEvent(event: GradesEvent) {
@@ -51,12 +65,12 @@ class GradesViewModel(
             GradesEvent.LoadData -> loadData()
             is GradesEvent.SubjectSelected -> {
                 _uiState.update { it.copy(selectedSubject = event.subject) }
-                refreshDerivedMetrics()
+                observeGrades(event.subject, _uiState.value.selectedPeriod)
             }
 
             is GradesEvent.PeriodSelected -> {
                 _uiState.update { it.copy(selectedPeriod = event.period) }
-                refreshDerivedMetrics()
+                observeGrades(_uiState.value.selectedSubject, event.period)
             }
 
             is GradesEvent.EditGrade -> {
@@ -71,6 +85,7 @@ class GradesViewModel(
 
             GradesEvent.RefreshAverages -> refreshDerivedMetrics()
             is GradesEvent.OpenDetail -> Unit
+            is GradesEvent.OcrImageSelected -> processOcr(event.uri)
             GradesEvent.SaveGrades -> saveGrades()
             GradesEvent.SendBulletinClicked -> sendBulletin()
             GradesEvent.ClearMessages -> {
@@ -80,21 +95,39 @@ class GradesViewModel(
     }
 
     private fun loadData() {
-        val current = _uiState.value
-        _uiState.update {
-            it.copy(
-                isLoading = false,
-                studentsDomain = mockStudents,
-                gradesDomain = gradeStore,
-                students = studentsFromDomain(mockStudents),
-                courseName = "${mockStudents.first().grade} Grado Sección ${mockStudents.first().section}",
-                subjects = listOf("Matemáticas", "Lengua", "Ciencias", "Estudios Sociales"),
-                periods = listOf("1er Lapso", "2do Lapso", "3er Lapso"),
-                selectedSubject = current.selectedSubject,
-                selectedPeriod = current.selectedPeriod
-            )
+        val state = _uiState.value
+        observeGrades(state.selectedSubject, state.selectedPeriod)
+    }
+
+    private fun observeGrades(subject: String, period: String) {
+        if (subject.isBlank() || period.isBlank()) return
+        observeJob?.cancel()
+        observeJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null) }
+            combine(
+                getStudentsUseCase(),
+                getGradesBySubjectAndPeriodUseCase(subject, period)
+            ) { students, grades ->
+                students to grades
+            }.collect { (students, grades) ->
+                gradeStore = grades
+                val subjects = (grades.map { it.subject } + subject).distinct()
+                val periods = (grades.map { it.period } + period).distinct()
+                _uiState.update {
+                    it.copy(
+                        studentsDomain = students,
+                        students = studentsFromDomain(students),
+                        gradesDomain = grades,
+                        subjects = subjects,
+                        periods = periods,
+                        selectedSubject = subject,
+                        selectedPeriod = period,
+                        isLoading = false
+                    )
+                }
+                refreshDerivedMetrics()
+            }
         }
-        refreshDerivedMetrics()
     }
 
     private fun updateGrade(
@@ -108,32 +141,26 @@ class GradesViewModel(
         val subject = _uiState.value.selectedSubject
         val period = _uiState.value.selectedPeriod
 
-        val existing = gradeStore.indexOfFirst {
-            it.studentId == studentId &&
-                it.subject == subject &&
-                it.period == period &&
-                it.activityName == activityName
+        viewModelScope.launch {
+            runCatching {
+                saveGradeUseCase(
+                    Grade(
+                        studentId = studentId,
+                        subject = subject,
+                        period = period,
+                        activityName = activityName,
+                        activityType = activityType,
+                        score = normalizedScore,
+                        maxScore = maxScore,
+                        syncPending = true
+                    )
+                )
+            }.onFailure { throwable ->
+                _uiState.update { state ->
+                    state.copy(errorMessage = throwable.message ?: "No se pudo guardar la calificación.")
+                }
+            }
         }
-
-        val updated = Grade(
-            id = if (existing >= 0) gradeStore[existing].id else 0L,
-            studentId = studentId,
-            subject = subject,
-            period = period,
-            activityName = activityName,
-            activityType = activityType,
-            score = normalizedScore,
-            maxScore = maxScore,
-            synced = false
-        )
-
-        gradeStore = if (existing >= 0) {
-            gradeStore.toMutableList().apply { this[existing] = updated }
-        } else {
-            gradeStore + updated
-        }
-
-        refreshDerivedMetrics()
     }
 
     private fun refreshDerivedMetrics() {
@@ -174,32 +201,88 @@ class GradesViewModel(
     private fun saveGrades() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, errorMessage = null, successMessage = null) }
-            delay(150)
-            _uiState.update { it.copy(isSaving = false, successMessage = "Calificaciones guardadas localmente.") }
+            _uiState.update {
+                it.copy(
+                    isSaving = false,
+                    successMessage = "Calificaciones actualizadas en almacenamiento local."
+                )
+            }
         }
     }
 
     private fun sendBulletin() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSending = true, errorMessage = null, successMessage = null) }
-            delay(150)
-            _uiState.update { it.copy(isSending = false, successMessage = "Boletín preparado para envío.") }
+            val state = _uiState.value
+            val filteredGrades = state.gradesDomain.filter {
+                it.subject == state.selectedSubject && it.period == state.selectedPeriod
+            }
+            val gradesByStudent = filteredGrades.groupBy { it.studentId }
+            val reportRecords = state.studentsDomain.mapNotNull { student ->
+                val grade = gradesByStudent[student.id]
+                    ?.firstOrNull()
+                    ?.copy(score = gradesByStudent[student.id]!!.map { it.score }.average())
+                    ?: return@mapNotNull null
+                student to grade
+            }
+            if (reportRecords.isEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        isSending = false,
+                        errorMessage = "No hay calificaciones para enviar en el filtro actual."
+                    )
+                }
+                return@launch
+            }
+            val message = TelegramMessageBuilder.buildGradeReport(
+                subject = state.selectedSubject,
+                period = state.selectedPeriod,
+                records = reportRecords
+            )
+            val sent = sendTelegramMessageUseCase(BuildConfig.TELEGRAM_DEFAULT_CHAT_ID, message)
+            _uiState.update {
+                it.copy(
+                    isSending = false,
+                    successMessage = if (sent) "Boletín enviado por Telegram."
+                    else "Boletín preparado, pero no se pudo enviar por Telegram.",
+                    errorMessage = if (!sent) {
+                        "Verifica TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID en local.properties."
+                    } else null
+                )
+            }
         }
     }
 
-    private fun studentsFromDomain(students: List<Student>): List<GradeStudentMock> = students.map { student ->
-        gradesMockStudents.firstOrNull { it.id == student.id }?.copy(name = student.fullName)
-            ?: GradeStudentMock(
+    private fun processOcr(uri: Uri) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isProcessingOcr = true, errorMessage = null, successMessage = null) }
+            val result = recognizeTextFromImageUseCase(uri)
+            result.onSuccess { ocr ->
+                _uiState.update {
+                    it.copy(
+                        isProcessingOcr = false,
+                        detectedOcrText = ocr.rawText,
+                        successMessage = "OCR completado. Revisa texto detectado para registrar notas."
+                    )
+                }
+            }.onFailure { throwable ->
+                _uiState.update {
+                    it.copy(
+                        isProcessingOcr = false,
+                        errorMessage = throwable.message ?: "No se pudo procesar la imagen de calificaciones."
+                    )
+                }
+            }
+        }
+    }
+
+    private fun studentsFromDomain(students: List<com.example.myapplication.domain.model.Student>): List<GradeStudentMock> =
+        students.map { student ->
+            GradeStudentMock(
                 id = student.id,
                 name = student.fullName,
                 score = null,
                 status = GradeVisualStatus.NOT_REGISTERED
             )
-    }
-
-    companion object {
-        fun mock(): GradesViewModel = GradesViewModel(
-            initialState = GradesUiState(students = gradesMockStudents)
-        )
-    }
+        }
 }

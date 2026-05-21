@@ -1,5 +1,7 @@
 package com.example.myapplication.presentation.grades
 
+import android.net.Uri
+
 sealed interface GradesEvent {
     data object LoadData : GradesEvent
     data class SubjectSelected(val subject: String) : GradesEvent
@@ -13,6 +15,7 @@ sealed interface GradesEvent {
     ) : GradesEvent
     data object RefreshAverages : GradesEvent
     data class OpenDetail(val studentId: Long) : GradesEvent
+    data class OcrImageSelected(val uri: Uri) : GradesEvent
     data object SaveGrades : GradesEvent
     data object SendBulletinClicked : GradesEvent
     data object ClearMessages : GradesEvent
