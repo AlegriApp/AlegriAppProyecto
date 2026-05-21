@@ -7,18 +7,43 @@ import com.example.myapplication.domain.model.AttendanceStatus
 fun AttendanceEntity.toDomain(): Attendance = Attendance(
     id = id,
     studentId = studentId,
+    courseId = courseId,
+    subjectId = subjectId,
+    teacherId = teacherId,
     date = date,
+    entryTime = entryTime,
     status = status.toAttendanceStatus(),
-    synced = synced
+    observation = observation,
+    justification = justification,
+    syncPending = syncPending
 )
 
 fun Attendance.toEntity(): AttendanceEntity = AttendanceEntity(
     id = id,
     studentId = studentId,
+    courseId = courseId,
+    subjectId = subjectId,
+    teacherId = teacherId,
     date = date,
-    status = status.name,
-    synced = synced
+    entryTime = entryTime,
+    status = status.toDatabaseStatus(),
+    observation = observation,
+    justification = justification,
+    syncPending = syncPending
 )
 
-private fun String.toAttendanceStatus(): AttendanceStatus =
-    runCatching { AttendanceStatus.valueOf(this) }.getOrDefault(AttendanceStatus.UNMARKED)
+private fun String.toAttendanceStatus(): AttendanceStatus = when (lowercase()) {
+    "presente", "present" -> AttendanceStatus.PRESENT
+    "atrasado", "late" -> AttendanceStatus.LATE
+    "ausente", "absent" -> AttendanceStatus.ABSENT
+    "justificado", "justified" -> AttendanceStatus.JUSTIFIED
+    else -> AttendanceStatus.UNMARKED
+}
+
+private fun AttendanceStatus.toDatabaseStatus(): String = when (this) {
+    AttendanceStatus.PRESENT -> "presente"
+    AttendanceStatus.LATE -> "atrasado"
+    AttendanceStatus.ABSENT -> "ausente"
+    AttendanceStatus.JUSTIFIED -> "justificado"
+    AttendanceStatus.UNMARKED -> "ausente"
+}

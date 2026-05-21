@@ -3,13 +3,20 @@ package com.example.myapplication.domain.model
 data class Grade(
     val id: Long = 0L,
     val studentId: Long,
+    val subjectId: Long? = null,
+    val courseId: Long? = null,
+    val periodAcademicId: Long? = null,
+    val evaluationTypeId: Long? = null,
     val subject: String,
     val period: String,
     val activityName: String,
     val activityType: String,
     val score: Double,
     val maxScore: Double,
-    val synced: Boolean = false
+    val observation: String? = null,
+    val teacherId: Long? = null,
+    val state: String = "registrado",
+    val syncPending: Boolean = false
 ) {
     init {
         require(subject.isNotBlank()) { "subject must not be blank" }

@@ -6,23 +6,37 @@ import com.example.myapplication.domain.model.Grade
 fun GradeEntity.toDomain(): Grade = Grade(
     id = id,
     studentId = studentId,
-    subject = subject,
-    period = period,
-    activityName = activityName,
-    activityType = activityType,
+    subjectId = subjectId,
+    courseId = courseId,
+    periodAcademicId = periodAcademicId,
+    evaluationTypeId = evaluationTypeId,
+    subject = subjectName,
+    period = periodName,
+    activityName = description,
+    activityType = evaluationTypeName,
     score = score,
     maxScore = maxScore,
-    synced = synced
+    observation = observation,
+    teacherId = teacherId,
+    state = state,
+    syncPending = syncPending
 )
 
 fun Grade.toEntity(): GradeEntity = GradeEntity(
     id = id,
     studentId = studentId,
-    subject = subject,
-    period = period,
-    activityName = activityName,
-    activityType = activityType,
+    subjectId = subjectId,
+    courseId = courseId,
+    periodAcademicId = periodAcademicId,
+    evaluationTypeId = evaluationTypeId,
+    description = activityName,
     score = score,
     maxScore = maxScore,
-    synced = synced
+    observation = observation,
+    teacherId = teacherId,
+    state = state,
+    syncPending = syncPending,
+    subjectName = subject,
+    periodName = period,
+    evaluationTypeName = activityType
 )

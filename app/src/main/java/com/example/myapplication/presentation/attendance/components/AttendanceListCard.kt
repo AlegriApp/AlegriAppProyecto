@@ -27,7 +27,7 @@ fun AttendanceListCard(
     courseName: String,
     students: List<AttendanceStudentUi>,
     registeredCount: Int,
-    statusByStudent: Map<Long, String>,
+    statusByStudent: Map<Long, AttendanceStatus>,
     onStatusSelected: (Long, AttendanceStatus) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -74,9 +74,7 @@ fun AttendanceListCard(
             students.forEachIndexed { index, student ->
                 AttendanceStudentItem(
                     student = student,
-                    selectedStatus = statusByStudent[student.id]
-                        ?.let(AttendanceStatus::valueOf)
-                        ?: AttendanceStatus.UNMARKED,
+                    selectedStatus = statusByStudent[student.id] ?: AttendanceStatus.UNMARKED,
                     onStatusSelected = { status ->
                         onStatusSelected(student.id, status)
                     }
@@ -102,8 +100,8 @@ private fun AttendanceListCardPreview() {
             students = attendanceMockUiState().students,
             registeredCount = 2,
             statusByStudent = mapOf(
-                1L to AttendanceStatus.PRESENT.name,
-                2L to AttendanceStatus.LATE.name
+                1L to AttendanceStatus.PRESENT,
+                2L to AttendanceStatus.LATE
             ),
             onStatusSelected = { _, _ -> }
         )

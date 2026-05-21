@@ -1,16 +1,20 @@
 package com.example.myapplication.data.remote.dto
 
 data class AttendanceSyncRequest(
-    val date: String,
-    val grade: String,
-    val section: String,
-    val records: List<Record>,
+    val fecha: String,
+    val cursoId: Long,
+    val materiaId: Long?,
+    val docenteId: Long?,
+    val asistencias: List<Record>,
     val syncMetadata: SyncMetadata = SyncMetadata()
 ) {
     data class Record(
-        val attendanceId: Long,
-        val studentId: Long,
-        val status: String
+        val asistenciaId: Long,
+        val estudianteId: Long,
+        val estado: String,
+        val observacion: String? = null,
+        val justificacion: String? = null,
+        val sincronizacionPendiente: Boolean = true
     )
 
     data class SyncMetadata(

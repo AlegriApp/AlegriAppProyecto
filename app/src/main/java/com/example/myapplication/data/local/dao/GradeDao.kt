@@ -10,16 +10,19 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface GradeDao {
 
-    @Query("SELECT * FROM grades WHERE studentId = :studentId ORDER BY id DESC")
+    @Query("SELECT * FROM calificaciones WHERE estudiante_id = :studentId ORDER BY id DESC")
     fun observeGradesByStudent(studentId: Long): Flow<List<GradeEntity>>
 
-    @Query("SELECT * FROM grades WHERE subject = :subject ORDER BY id DESC")
-    fun observeGradesBySubject(subject: String): Flow<List<GradeEntity>>
+    @Query("SELECT * FROM calificaciones WHERE materia_nombre = :subject ORDER BY id DESC")
+    fun observeGradesBySubjectName(subject: String): Flow<List<GradeEntity>>
 
-    @Query("SELECT * FROM grades WHERE period = :period ORDER BY id DESC")
-    fun observeGradesByPeriod(period: String): Flow<List<GradeEntity>>
+    @Query("SELECT * FROM calificaciones WHERE periodo_nombre = :period ORDER BY id DESC")
+    fun observeGradesByPeriodName(period: String): Flow<List<GradeEntity>>
 
-    @Query("SELECT * FROM grades WHERE subject = :subject AND period = :period ORDER BY id DESC")
+    @Query(
+        "SELECT * FROM calificaciones " +
+            "WHERE materia_nombre = :subject AND periodo_nombre = :period ORDER BY id DESC"
+    )
     fun observeGradesBySubjectAndPeriod(subject: String, period: String): Flow<List<GradeEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -28,9 +31,9 @@ interface GradeDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrReplaceGrades(grades: List<GradeEntity>)
 
-    @Query("SELECT * FROM grades WHERE synced = 0")
+    @Query("SELECT * FROM calificaciones WHERE sincronizacion_pendiente = 1")
     suspend fun getPendingSyncGrades(): List<GradeEntity>
 
-    @Query("UPDATE grades SET synced = 1 WHERE id IN (:ids)")
+    @Query("UPDATE calificaciones SET sincronizacion_pendiente = 0 WHERE id IN (:ids)")
     suspend fun markAsSynced(ids: List<Long>)
 }

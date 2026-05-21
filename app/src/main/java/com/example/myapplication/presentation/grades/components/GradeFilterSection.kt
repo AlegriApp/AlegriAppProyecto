@@ -27,6 +27,8 @@ import com.example.myapplication.ui.theme.MyApplicationTheme
 fun GradeFilterSection(
     selectedSubject: String,
     selectedPeriod: String,
+    subjects: List<String>,
+    periods: List<String>,
     onSubjectSelected: (String) -> Unit,
     onPeriodSelected: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -48,14 +50,14 @@ fun GradeFilterSection(
             GradeDropdown(
                 label = "Materia",
                 selectedValue = selectedSubject,
-                options = gradesSubjects,
+                options = subjects,
                 onSelected = onSubjectSelected,
                 modifier = Modifier.weight(1f)
             )
             GradeDropdown(
                 label = "Periodo",
                 selectedValue = selectedPeriod,
-                options = gradesPeriods,
+                options = periods,
                 onSelected = onPeriodSelected,
                 modifier = Modifier.weight(1f)
             )
@@ -115,6 +117,8 @@ private fun GradeFilterSectionPreview() {
         GradeFilterSection(
             selectedSubject = "Matemáticas",
             selectedPeriod = "1er Lapso",
+            subjects = listOf("Matemáticas"),
+            periods = listOf("1er Lapso"),
             onSubjectSelected = {},
             onPeriodSelected = {}
         )

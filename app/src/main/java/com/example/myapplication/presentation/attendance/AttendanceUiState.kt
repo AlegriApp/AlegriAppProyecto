@@ -6,9 +6,9 @@ import com.example.myapplication.domain.model.Student
 
 data class AttendanceUiState(
     val screenTitle: String = "Toma de Asistencia",
-    val dateLabel: String = "Fecha: miércoles, 6 de mayo de 2026",
-    val selectedDate: String = "2026-05-06",
-    val courseName: String = "5to Grado Sección A",
+    val dateLabel: String = "",
+    val selectedDate: String = "",
+    val courseName: String = "",
     val students: List<AttendanceStudentUi> = emptyList(),
     val attendanceByStudent: Map<Long, AttendanceStatus> = emptyMap(),
     val presentCount: Int = 0,
@@ -18,6 +18,8 @@ data class AttendanceUiState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val isSending: Boolean = false,
+    val isProcessingOcr: Boolean = false,
+    val detectedOcrText: String = "",
     val successMessage: String? = null,
     val errorMessage: String? = null,
     val isOffline: Boolean = false,
@@ -51,7 +53,9 @@ data class AttendanceUiState(
         return copy(
             presentCount = statusValues.count { it == AttendanceStatus.PRESENT },
             lateCount = statusValues.count { it == AttendanceStatus.LATE },
-            absentCount = statusValues.count { it == AttendanceStatus.ABSENT },
+            absentCount = statusValues.count {
+                it == AttendanceStatus.ABSENT || it == AttendanceStatus.JUSTIFIED
+            },
             unmarkedCount = statusValues.count { it == AttendanceStatus.UNMARKED }
         )
     }
@@ -73,6 +77,8 @@ data class AttendanceUiState(
                     state.isLoading,
                     state.isSaving,
                     state.isSending,
+                    state.isProcessingOcr,
+                    state.detectedOcrText,
                     state.presentCount,
                     state.lateCount,
                     state.absentCount,
@@ -104,12 +110,14 @@ data class AttendanceUiState(
                     isLoading = restored[6] as Boolean,
                     isSaving = restored[7] as Boolean,
                     isSending = restored[8] as Boolean,
-                    presentCount = restored[9] as Int,
-                    lateCount = restored[10] as Int,
-                    absentCount = restored[11] as Int,
-                    unmarkedCount = restored[12] as Int,
-                    successMessage = (restored[13] as String).takeIf { it.isNotBlank() },
-                    errorMessage = (restored[14] as String).takeIf { it.isNotBlank() }
+                    isProcessingOcr = restored[9] as Boolean,
+                    detectedOcrText = restored[10] as String,
+                    presentCount = restored[11] as Int,
+                    lateCount = restored[12] as Int,
+                    absentCount = restored[13] as Int,
+                    unmarkedCount = restored[14] as Int,
+                    successMessage = (restored[15] as String).takeIf { it.isNotBlank() },
+                    errorMessage = (restored[16] as String).takeIf { it.isNotBlank() }
                 )
             }
         )
@@ -142,7 +150,9 @@ data class AttendanceSummary(
             return AttendanceSummary(
                 presentCount = statusValues.count { it == AttendanceStatus.PRESENT },
                 lateCount = statusValues.count { it == AttendanceStatus.LATE },
-                absentCount = statusValues.count { it == AttendanceStatus.ABSENT },
+                absentCount = statusValues.count {
+                    it == AttendanceStatus.ABSENT || it == AttendanceStatus.JUSTIFIED
+                },
                 unmarkedCount = statusValues.count { it == AttendanceStatus.UNMARKED }
             )
         }
