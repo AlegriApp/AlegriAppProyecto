@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Grading
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
+import androidx.compose.material.icons.outlined.ReportProblem
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -30,7 +31,8 @@ import com.example.myapplication.ui.theme.MyApplicationTheme
 @Composable
 fun HomeScreen(
     onOpenAttendance: () -> Unit = {},
-    onOpenGrades: () -> Unit = {}
+    onOpenGrades: () -> Unit = {},
+    onOpenIncidents: () -> Unit = {}
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
@@ -63,7 +65,7 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
-                            text = "Selecciona el módulo que quieres visualizar.",
+                            text = "Selecciona el m\u00f3dulo que quieres visualizar.",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -78,10 +80,18 @@ fun HomeScreen(
 
                         HomeModuleCard(
                             title = "Calificaciones",
-                            description = "Abrir la pantalla de registro académico.",
+                            description = "Abrir la pantalla de registro acad\u00e9mico.",
                             buttonLabel = "Ir a calificaciones",
                             icon = Icons.AutoMirrored.Filled.Grading,
                             onClick = onOpenGrades
+                        )
+
+                        HomeModuleCard(
+                            title = "Incidentes",
+                            description = "Abrir la interfaz de reporte de incidentes.",
+                            buttonLabel = "Ir a incidentes",
+                            icon = Icons.Outlined.ReportProblem,
+                            onClick = onOpenIncidents
                         )
                     }
                 }
