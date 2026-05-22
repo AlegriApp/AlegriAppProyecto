@@ -2,6 +2,7 @@ package com.example.myapplication.data.repository
 
 import com.example.myapplication.data.local.dao.StudentDao
 import com.example.myapplication.data.mapper.toDomainList
+import com.example.myapplication.data.mapper.toEntityList
 import com.example.myapplication.domain.model.Student
 import com.example.myapplication.domain.repository.StudentRepository
 import kotlinx.coroutines.flow.Flow
@@ -12,5 +13,10 @@ class StudentRepositoryImpl(
 ) : StudentRepository {
     override fun observeStudents(): Flow<List<Student>> = studentDao.observeStudents().map { entities ->
         entities.toDomainList()
+    }
+
+    override suspend fun upsertStudents(students: List<Student>) {
+        if (students.isEmpty()) return
+        studentDao.insertOrReplaceStudents(students.toEntityList())
     }
 }

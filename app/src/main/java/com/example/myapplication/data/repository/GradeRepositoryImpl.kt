@@ -17,6 +17,12 @@ class GradeRepositoryImpl(
         }
 
     override suspend fun upsertGrade(grade: Grade) {
-        gradeDao.insertOrReplaceGrade(grade.toEntity())
+        val existing = gradeDao.getByStudentSubjectPeriodAndDescription(
+            studentId = grade.studentId,
+            subject = grade.subject,
+            period = grade.period,
+            description = grade.activityName
+        )
+        gradeDao.insertOrReplaceGrade(grade.toEntity(existingId = existing?.id))
     }
 }

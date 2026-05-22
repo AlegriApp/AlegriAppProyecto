@@ -1,29 +1,34 @@
 package com.example.myapplication.core.network
 
+import com.example.myapplication.data.remote.api.SupabaseApiService
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+
 object RetrofitClient {
 
-    private const val BASE_URL = "https://nqtobrslyrfwcuexffdu.supabase.co/rest/v1/"
-    private const val API_KEY = "sb_publishable_U9D3f7hGVUvU1PbG7auJMA_lMZUPoSh"
+    fun createSupabaseApi(baseUrl: String, apiKey: String): SupabaseApiService? {
+        if (baseUrl.isBlank() || apiKey.isBlank()) return null
+        val client = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("apikey", apiKey)
+                    .addHeader("Authorization", "Bearer $apiKey")
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Accept", "application/json")
+                    .build()
+                chain.proceed(request)
+            }
+            .build()
 
-    private val client = OkHttpClient.Builder()
-        .addInterceptor { chain ->
-            val request = chain.request().newBuilder()
-                .addHeader("apikey", API_KEY)
-                .addHeader("Authorization", "Bearer $API_KEY")
-                .addHeader("Content-Type", "application/json")
-                .build()
+        return Retrofit.Builder()
+            .baseUrl(ensureTrailingSlash(baseUrl))
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(SupabaseApiService::class.java)
+    }
 
-            chain.proceed(request)
-        }
-        .build()
-
-    val retrofit: Retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL)
-        .client(client)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-
+    private fun ensureTrailingSlash(url: String): String =
+        if (url.endsWith("/")) url else "$url/"
 }

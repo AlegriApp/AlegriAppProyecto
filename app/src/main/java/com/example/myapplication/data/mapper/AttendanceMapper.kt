@@ -18,8 +18,8 @@ fun AttendanceEntity.toDomain(): Attendance = Attendance(
     syncPending = syncPending
 )
 
-fun Attendance.toEntity(): AttendanceEntity = AttendanceEntity(
-    id = id,
+fun Attendance.toEntity(existingId: Long? = null): AttendanceEntity = AttendanceEntity(
+    id = existingId ?: id,
     studentId = studentId,
     courseId = courseId,
     subjectId = subjectId,
@@ -45,5 +45,5 @@ private fun AttendanceStatus.toDatabaseStatus(): String = when (this) {
     AttendanceStatus.LATE -> "atrasado"
     AttendanceStatus.ABSENT -> "ausente"
     AttendanceStatus.JUSTIFIED -> "justificado"
-    AttendanceStatus.UNMARKED -> "ausente"
+    AttendanceStatus.UNMARKED -> error("No se puede persistir asistencia sin marcar")
 }

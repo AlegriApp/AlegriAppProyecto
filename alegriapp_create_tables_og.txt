@@ -1,0 +1,757 @@
+-- =============================================================
+-- AlegriApp — Script CREATE TABLE completo
+-- Incluye: PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK, INDEX
+-- PostgreSQL
+-- =============================================================
+
+
+-- -------------------------------------------------------
+-- CATÁLOGOS
+-- -------------------------------------------------------
+
+CREATE TABLE roles (
+    id          SERIAL PRIMARY KEY,
+    nombre      TEXT NOT NULL,
+    descripcion TEXT,
+    activo      BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT roles_nombre_unique UNIQUE (nombre)
+);
+
+CREATE TABLE tipos_incidente (
+    id          SERIAL PRIMARY KEY,
+    nombre      TEXT NOT NULL,
+    descripcion TEXT,
+    activo      BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT tipos_incidente_nombre_unique UNIQUE (nombre)
+);
+
+CREATE TABLE tipos_evaluacion (
+    id          SERIAL PRIMARY KEY,
+    nombre      TEXT NOT NULL,
+    descripcion TEXT,
+    activo      BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT tipos_evaluacion_nombre_unique UNIQUE (nombre)
+);
+
+CREATE TABLE tipos_relacion_representante (
+    id         SERIAL PRIMARY KEY,
+    nombre     TEXT NOT NULL,
+    activo     BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT tipos_relacion_nombre_unique UNIQUE (nombre)
+);
+
+CREATE TABLE tipos_analisis_ml (
+    id          SERIAL PRIMARY KEY,
+    nombre      TEXT NOT NULL,
+    descripcion TEXT,
+    activo      BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT tipos_analisis_ml_nombre_unique UNIQUE (nombre)
+);
+
+CREATE TABLE tipos_reporte (
+    id          SERIAL PRIMARY KEY,
+    nombre      TEXT NOT NULL,
+    descripcion TEXT,
+    activo      BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT tipos_reporte_nombre_unique UNIQUE (nombre)
+);
+
+CREATE TABLE niveles_academicos (
+    id          SERIAL PRIMARY KEY,
+    nombre      TEXT NOT NULL,
+    descripcion TEXT,
+    orden       INTEGER,
+    activo      BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT niveles_academicos_nombre_unique UNIQUE (nombre),
+    CONSTRAINT niveles_academicos_orden_positive CHECK (orden > 0)
+);
+
+CREATE TABLE periodos_academicos (
+    id           SERIAL PRIMARY KEY,
+    nombre       TEXT NOT NULL,
+    anio_lectivo TEXT NOT NULL,
+    fecha_inicio TIMESTAMPTZ NOT NULL,
+    fecha_fin    TIMESTAMPTZ NOT NULL,
+    activo       BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT periodos_fechas_validas CHECK (fecha_fin > fecha_inicio)
+);
+
+
+-- -------------------------------------------------------
+-- USUARIOS
+-- -------------------------------------------------------
+
+CREATE TABLE usuarios (
+    id            SERIAL PRIMARY KEY,
+    nombre        TEXT NOT NULL,
+    apellido      TEXT NOT NULL,
+    email         TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    telefono      TEXT,
+    rol_id        INTEGER NOT NULL,
+    estado        TEXT NOT NULL DEFAULT 'activo',
+    ultimo_acceso TIMESTAMPTZ,
+    foto_perfil   TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at    TIMESTAMPTZ,
+    created_by    INTEGER,
+    updated_by    INTEGER,
+    CONSTRAINT usuarios_email_unique UNIQUE (email),
+    CONSTRAINT usuarios_estado_valido CHECK (estado IN ('activo', 'inactivo', 'suspendido', 'bloqueado')),
+    CONSTRAINT usuarios_rol_id_fk FOREIGN KEY (rol_id) REFERENCES roles(id)
+);
+
+CREATE INDEX idx_usuarios_email     ON usuarios(email);
+CREATE INDEX idx_usuarios_rol_id    ON usuarios(rol_id);
+CREATE INDEX idx_usuarios_estado    ON usuarios(estado);
+CREATE INDEX idx_usuarios_deleted   ON usuarios(deleted_at);
+
+CREATE TABLE personal_autorizado (
+    id            SERIAL PRIMARY KEY,
+    usuario_id    INTEGER NOT NULL,
+    cargo         TEXT,
+    cedula        TEXT,
+    fecha_ingreso TIMESTAMPTZ,
+    observaciones TEXT,
+    activo        BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at    TIMESTAMPTZ,
+    created_by    INTEGER,
+    updated_by    INTEGER,
+    CONSTRAINT personal_cedula_unique UNIQUE (cedula),
+    CONSTRAINT personal_usuario_id_fk FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+);
+
+CREATE TABLE permisos_rol (
+    id         SERIAL PRIMARY KEY,
+    rol_id     INTEGER NOT NULL,
+    modulo     TEXT NOT NULL,
+    accion     TEXT NOT NULL,
+    activo     BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT permisos_rol_id_fk FOREIGN KEY (rol_id) REFERENCES roles(id),
+    CONSTRAINT permisos_rol_modulo_accion_unique UNIQUE (rol_id, modulo, accion)
+);
+
+CREATE INDEX idx_permisos_rol_id ON permisos_rol(rol_id);
+
+
+-- -------------------------------------------------------
+-- REPRESENTANTES
+-- -------------------------------------------------------
+
+CREATE TABLE representantes (
+    id                   SERIAL PRIMARY KEY,
+    usuario_id           INTEGER,
+    nombre               TEXT NOT NULL,
+    apellido             TEXT NOT NULL,
+    cedula               TEXT,
+    telefono             TEXT,
+    telefono_alternativo TEXT,
+    email                TEXT,
+    direccion            TEXT,
+    ocupacion            TEXT,
+    estado               TEXT NOT NULL DEFAULT 'activo',
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at           TIMESTAMPTZ,
+    created_by           INTEGER,
+    updated_by           INTEGER,
+    CONSTRAINT representantes_cedula_unique UNIQUE (cedula),
+    CONSTRAINT representantes_estado_valido CHECK (estado IN ('activo', 'inactivo')),
+    CONSTRAINT representantes_usuario_id_fk FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+);
+
+CREATE INDEX idx_representantes_cedula   ON representantes(cedula);
+CREATE INDEX idx_representantes_deleted  ON representantes(deleted_at);
+
+
+-- -------------------------------------------------------
+-- ESTUDIANTES
+-- -------------------------------------------------------
+
+CREATE TABLE estudiantes (
+    id                   SERIAL PRIMARY KEY,
+    codigo_institucional TEXT NOT NULL,
+    nombre               TEXT NOT NULL,
+    apellido             TEXT NOT NULL,
+    cedula               TEXT,
+    fecha_nacimiento     DATE,
+    genero               TEXT,
+    direccion            TEXT,
+    fotografia           TEXT,
+    estado               TEXT NOT NULL DEFAULT 'activo',
+    observaciones        TEXT,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at           TIMESTAMPTZ,
+    created_by           INTEGER,
+    updated_by           INTEGER,
+    CONSTRAINT estudiantes_codigo_unique UNIQUE (codigo_institucional),
+    CONSTRAINT estudiantes_cedula_unique UNIQUE (cedula),
+    CONSTRAINT estudiantes_estado_valido CHECK (estado IN ('activo', 'inactivo', 'retirado', 'graduado')),
+    CONSTRAINT estudiantes_genero_valido CHECK (genero IN ('M', 'F', 'otro') OR genero IS NULL)
+);
+
+CREATE INDEX idx_estudiantes_codigo    ON estudiantes(codigo_institucional);
+CREATE INDEX idx_estudiantes_apellido  ON estudiantes(apellido);
+CREATE INDEX idx_estudiantes_estado    ON estudiantes(estado);
+CREATE INDEX idx_estudiantes_deleted   ON estudiantes(deleted_at);
+
+CREATE TABLE estudiante_representante (
+    id               SERIAL PRIMARY KEY,
+    estudiante_id    INTEGER NOT NULL,
+    representante_id INTEGER NOT NULL,
+    tipo_relacion_id INTEGER NOT NULL,
+    es_principal     BOOLEAN NOT NULL DEFAULT FALSE,
+    observaciones    TEXT,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at       TIMESTAMPTZ,
+    created_by       INTEGER,
+    CONSTRAINT er_estudiante_id_fk    FOREIGN KEY (estudiante_id)    REFERENCES estudiantes(id),
+    CONSTRAINT er_representante_id_fk FOREIGN KEY (representante_id) REFERENCES representantes(id),
+    CONSTRAINT er_tipo_relacion_id_fk FOREIGN KEY (tipo_relacion_id) REFERENCES tipos_relacion_representante(id),
+    CONSTRAINT er_estudiante_representante_unique UNIQUE (estudiante_id, representante_id)
+);
+
+CREATE INDEX idx_er_estudiante_id    ON estudiante_representante(estudiante_id);
+CREATE INDEX idx_er_representante_id ON estudiante_representante(representante_id);
+
+
+-- -------------------------------------------------------
+-- CURSOS Y MATERIAS
+-- -------------------------------------------------------
+
+CREATE TABLE cursos (
+    id                   SERIAL PRIMARY KEY,
+    nombre               TEXT NOT NULL,
+    nivel_academico_id   INTEGER NOT NULL,
+    paralelo             TEXT NOT NULL,
+    anio_lectivo         TEXT NOT NULL,
+    periodo_academico_id INTEGER,
+    capacidad_maxima     INTEGER,
+    descripcion          TEXT,
+    estado               TEXT NOT NULL DEFAULT 'activo',
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at           TIMESTAMPTZ,
+    created_by           INTEGER,
+    updated_by           INTEGER,
+    CONSTRAINT cursos_estado_valido CHECK (estado IN ('activo', 'inactivo', 'cerrado')),
+    CONSTRAINT cursos_capacidad_positiva CHECK (capacidad_maxima IS NULL OR capacidad_maxima > 0),
+    CONSTRAINT cursos_nivel_academico_id_fk   FOREIGN KEY (nivel_academico_id)   REFERENCES niveles_academicos(id),
+    CONSTRAINT cursos_periodo_academico_id_fk FOREIGN KEY (periodo_academico_id) REFERENCES periodos_academicos(id),
+    CONSTRAINT cursos_nivel_paralelo_anio_unique UNIQUE (nivel_academico_id, paralelo, anio_lectivo)
+);
+
+CREATE INDEX idx_cursos_nivel_id    ON cursos(nivel_academico_id);
+CREATE INDEX idx_cursos_anio        ON cursos(anio_lectivo);
+CREATE INDEX idx_cursos_estado      ON cursos(estado);
+
+CREATE TABLE estudiante_curso (
+    id                SERIAL PRIMARY KEY,
+    estudiante_id     INTEGER NOT NULL,
+    curso_id          INTEGER NOT NULL,
+    fecha_inscripcion TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    estado            TEXT NOT NULL DEFAULT 'activo',
+    observaciones     TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at        TIMESTAMPTZ,
+    created_by        INTEGER,
+    CONSTRAINT ec_estado_valido CHECK (estado IN ('activo', 'retirado', 'trasladado')),
+    CONSTRAINT ec_estudiante_id_fk FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id),
+    CONSTRAINT ec_curso_id_fk      FOREIGN KEY (curso_id)      REFERENCES cursos(id),
+    CONSTRAINT ec_estudiante_curso_unique UNIQUE (estudiante_id, curso_id)
+);
+
+CREATE INDEX idx_ec_estudiante_id ON estudiante_curso(estudiante_id);
+CREATE INDEX idx_ec_curso_id      ON estudiante_curso(curso_id);
+
+CREATE TABLE materias (
+    id          SERIAL PRIMARY KEY,
+    nombre      TEXT NOT NULL,
+    descripcion TEXT,
+    curso_id    INTEGER NOT NULL,
+    docente_id  INTEGER,
+    estado      TEXT NOT NULL DEFAULT 'activo',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at  TIMESTAMPTZ,
+    created_by  INTEGER,
+    updated_by  INTEGER,
+    CONSTRAINT materias_estado_valido CHECK (estado IN ('activo', 'inactivo')),
+    CONSTRAINT materias_curso_id_fk   FOREIGN KEY (curso_id)   REFERENCES cursos(id),
+    CONSTRAINT materias_docente_id_fk FOREIGN KEY (docente_id) REFERENCES usuarios(id),
+    CONSTRAINT materias_nombre_curso_unique UNIQUE (nombre, curso_id)
+);
+
+CREATE INDEX idx_materias_curso_id   ON materias(curso_id);
+CREATE INDEX idx_materias_docente_id ON materias(docente_id);
+
+CREATE TABLE docente_curso (
+    id         SERIAL PRIMARY KEY,
+    docente_id INTEGER NOT NULL,
+    curso_id   INTEGER NOT NULL,
+    materia_id INTEGER,
+    es_tutor   BOOLEAN NOT NULL DEFAULT FALSE,
+    estado     TEXT NOT NULL DEFAULT 'activo',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ,
+    created_by INTEGER,
+    CONSTRAINT dc_estado_valido  CHECK (estado IN ('activo', 'inactivo')),
+    CONSTRAINT dc_docente_id_fk  FOREIGN KEY (docente_id)  REFERENCES usuarios(id),
+    CONSTRAINT dc_curso_id_fk    FOREIGN KEY (curso_id)    REFERENCES cursos(id),
+    CONSTRAINT dc_materia_id_fk  FOREIGN KEY (materia_id)  REFERENCES materias(id),
+    CONSTRAINT dc_docente_curso_materia_unique UNIQUE (docente_id, curso_id, materia_id)
+);
+
+CREATE INDEX idx_dc_docente_id ON docente_curso(docente_id);
+CREATE INDEX idx_dc_curso_id   ON docente_curso(curso_id);
+
+
+-- -------------------------------------------------------
+-- ASISTENCIA
+-- -------------------------------------------------------
+
+CREATE TABLE asistencias (
+    id                       SERIAL PRIMARY KEY,
+    estudiante_id            INTEGER NOT NULL,
+    curso_id                 INTEGER NOT NULL,
+    materia_id               INTEGER,
+    fecha                    DATE NOT NULL,
+    hora_entrada             TIME,
+    estado                   TEXT NOT NULL DEFAULT 'presente',
+    observacion              TEXT,
+    docente_id               INTEGER,
+    justificacion            TEXT,
+    sincronizacion_pendiente BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at               TIMESTAMPTZ,
+    created_by               INTEGER,
+    updated_by               INTEGER,
+    CONSTRAINT asistencias_estado_valido CHECK (estado IN ('presente', 'ausente', 'atrasado', 'justificado')),
+    CONSTRAINT asistencias_estudiante_id_fk FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id),
+    CONSTRAINT asistencias_curso_id_fk      FOREIGN KEY (curso_id)      REFERENCES cursos(id),
+    CONSTRAINT asistencias_materia_id_fk    FOREIGN KEY (materia_id)    REFERENCES materias(id),
+    CONSTRAINT asistencias_docente_id_fk    FOREIGN KEY (docente_id)    REFERENCES usuarios(id),
+    CONSTRAINT asistencias_estudiante_curso_fecha_unique UNIQUE (estudiante_id, curso_id, fecha, materia_id)
+);
+
+CREATE INDEX idx_asistencias_estudiante_id ON asistencias(estudiante_id);
+CREATE INDEX idx_asistencias_curso_id      ON asistencias(curso_id);
+CREATE INDEX idx_asistencias_fecha         ON asistencias(fecha);
+CREATE INDEX idx_asistencias_estado        ON asistencias(estado);
+CREATE INDEX idx_asistencias_sync          ON asistencias(sincronizacion_pendiente) WHERE sincronizacion_pendiente = TRUE;
+
+
+-- -------------------------------------------------------
+-- CALIFICACIONES
+-- -------------------------------------------------------
+
+CREATE TABLE calificaciones (
+    id                   SERIAL PRIMARY KEY,
+    estudiante_id        INTEGER NOT NULL,
+    materia_id           INTEGER NOT NULL,
+    curso_id             INTEGER NOT NULL,
+    periodo_academico_id INTEGER,
+    tipo_evaluacion_id   INTEGER NOT NULL,
+    descripcion          TEXT,
+    nota_obtenida        NUMERIC(5,2) NOT NULL,
+    nota_maxima          NUMERIC(5,2) NOT NULL,
+    observacion          TEXT,
+    docente_id           INTEGER,
+    estado               TEXT NOT NULL DEFAULT 'registrado',
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at           TIMESTAMPTZ,
+    created_by           INTEGER,
+    updated_by           INTEGER,
+    CONSTRAINT calificaciones_notas_validas     CHECK (nota_obtenida >= 0 AND nota_maxima > 0 AND nota_obtenida <= nota_maxima),
+    CONSTRAINT calificaciones_estado_valido     CHECK (estado IN ('registrado', 'revisado', 'publicado', 'anulado')),
+    CONSTRAINT calificaciones_estudiante_id_fk  FOREIGN KEY (estudiante_id)        REFERENCES estudiantes(id),
+    CONSTRAINT calificaciones_materia_id_fk     FOREIGN KEY (materia_id)           REFERENCES materias(id),
+    CONSTRAINT calificaciones_curso_id_fk       FOREIGN KEY (curso_id)             REFERENCES cursos(id),
+    CONSTRAINT calificaciones_periodo_id_fk     FOREIGN KEY (periodo_academico_id) REFERENCES periodos_academicos(id),
+    CONSTRAINT calificaciones_tipo_eval_id_fk   FOREIGN KEY (tipo_evaluacion_id)   REFERENCES tipos_evaluacion(id),
+    CONSTRAINT calificaciones_docente_id_fk     FOREIGN KEY (docente_id)           REFERENCES usuarios(id)
+);
+
+CREATE INDEX idx_calificaciones_estudiante_id ON calificaciones(estudiante_id);
+CREATE INDEX idx_calificaciones_materia_id    ON calificaciones(materia_id);
+CREATE INDEX idx_calificaciones_curso_id      ON calificaciones(curso_id);
+CREATE INDEX idx_calificaciones_periodo_id    ON calificaciones(periodo_academico_id);
+
+
+-- -------------------------------------------------------
+-- INCIDENTES
+-- -------------------------------------------------------
+
+CREATE TABLE incidentes (
+    id                SERIAL PRIMARY KEY,
+    estudiante_id     INTEGER NOT NULL,
+    tipo_incidente_id INTEGER NOT NULL,
+    descripcion       TEXT NOT NULL,
+    fecha_hora        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    nivel_gravedad    TEXT NOT NULL DEFAULT 'bajo',
+    estado            TEXT NOT NULL DEFAULT 'abierto',
+    observaciones     TEXT,
+    reportado_por_id  INTEGER,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at        TIMESTAMPTZ,
+    created_by        INTEGER,
+    updated_by        INTEGER,
+    CONSTRAINT incidentes_gravedad_valida CHECK (nivel_gravedad IN ('bajo', 'medio', 'alto', 'critico')),
+    CONSTRAINT incidentes_estado_valido   CHECK (estado IN ('abierto', 'en_seguimiento', 'cerrado', 'archivado')),
+    CONSTRAINT incidentes_estudiante_id_fk     FOREIGN KEY (estudiante_id)     REFERENCES estudiantes(id),
+    CONSTRAINT incidentes_tipo_incidente_id_fk FOREIGN KEY (tipo_incidente_id) REFERENCES tipos_incidente(id),
+    CONSTRAINT incidentes_reportado_por_id_fk  FOREIGN KEY (reportado_por_id)  REFERENCES usuarios(id)
+);
+
+CREATE INDEX idx_incidentes_estudiante_id ON incidentes(estudiante_id);
+CREATE INDEX idx_incidentes_estado        ON incidentes(estado);
+CREATE INDEX idx_incidentes_fecha_hora    ON incidentes(fecha_hora);
+CREATE INDEX idx_incidentes_gravedad      ON incidentes(nivel_gravedad);
+
+CREATE TABLE seguimiento_incidente (
+    id            SERIAL PRIMARY KEY,
+    incidente_id  INTEGER NOT NULL,
+    descripcion   TEXT NOT NULL,
+    accion_tomada TEXT,
+    usuario_id    INTEGER,
+    fecha_hora    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by    INTEGER,
+    CONSTRAINT si_incidente_id_fk FOREIGN KEY (incidente_id) REFERENCES incidentes(id),
+    CONSTRAINT si_usuario_id_fk   FOREIGN KEY (usuario_id)   REFERENCES usuarios(id)
+);
+
+CREATE INDEX idx_si_incidente_id ON seguimiento_incidente(incidente_id);
+
+
+-- -------------------------------------------------------
+-- EVIDENCIAS MULTIMEDIA
+-- -------------------------------------------------------
+
+CREATE TABLE evidencias (
+    id             SERIAL PRIMARY KEY,
+    ruta_local     TEXT,
+    url_remota     TEXT,
+    tipo_archivo   TEXT NOT NULL,
+    nombre_archivo TEXT,
+    tamano_bytes   INTEGER,
+    fecha_captura  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    descripcion    TEXT,
+    incidente_id   INTEGER,
+    asistencia_id  INTEGER,
+    estudiante_id  INTEGER,
+    cargado_por_id INTEGER,
+    estado         TEXT NOT NULL DEFAULT 'activo',
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at     TIMESTAMPTZ,
+    created_by     INTEGER,
+    CONSTRAINT evidencias_tipo_archivo_valido CHECK (tipo_archivo IN ('imagen', 'video', 'audio', 'documento', 'otro')),
+    CONSTRAINT evidencias_estado_valido       CHECK (estado IN ('activo', 'eliminado', 'archivado')),
+    CONSTRAINT evidencias_tamano_positivo     CHECK (tamano_bytes IS NULL OR tamano_bytes > 0),
+    CONSTRAINT evidencias_al_menos_una_ruta   CHECK (ruta_local IS NOT NULL OR url_remota IS NOT NULL),
+    CONSTRAINT evidencias_incidente_id_fk   FOREIGN KEY (incidente_id)   REFERENCES incidentes(id),
+    CONSTRAINT evidencias_asistencia_id_fk  FOREIGN KEY (asistencia_id)  REFERENCES asistencias(id),
+    CONSTRAINT evidencias_estudiante_id_fk  FOREIGN KEY (estudiante_id)  REFERENCES estudiantes(id),
+    CONSTRAINT evidencias_cargado_por_id_fk FOREIGN KEY (cargado_por_id) REFERENCES usuarios(id)
+);
+
+CREATE INDEX idx_evidencias_incidente_id  ON evidencias(incidente_id);
+CREATE INDEX idx_evidencias_asistencia_id ON evidencias(asistencia_id);
+CREATE INDEX idx_evidencias_estudiante_id ON evidencias(estudiante_id);
+
+
+-- -------------------------------------------------------
+-- GOOGLE ML KIT
+-- -------------------------------------------------------
+
+CREATE TABLE registros_analisis_ml (
+    id                  SERIAL PRIMARY KEY,
+    tipo_analisis_id    INTEGER NOT NULL,
+    resultado_detectado TEXT,
+    confianza           NUMERIC(5,4),
+    datos_brutos        TEXT,
+    estudiante_id       INTEGER,
+    asistencia_id       INTEGER,
+    evidencia_id        INTEGER,
+    estado_validacion   TEXT NOT NULL DEFAULT 'pendiente',
+    validado_por_id     INTEGER,
+    fecha_analisis      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    exitoso             BOOLEAN NOT NULL DEFAULT TRUE,
+    mensaje_error       TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT ml_confianza_valida        CHECK (confianza IS NULL OR (confianza >= 0 AND confianza <= 1)),
+    CONSTRAINT ml_estado_validacion_valido CHECK (estado_validacion IN ('pendiente', 'validado', 'rechazado')),
+    CONSTRAINT ml_tipo_analisis_id_fk FOREIGN KEY (tipo_analisis_id) REFERENCES tipos_analisis_ml(id),
+    CONSTRAINT ml_estudiante_id_fk    FOREIGN KEY (estudiante_id)    REFERENCES estudiantes(id),
+    CONSTRAINT ml_asistencia_id_fk    FOREIGN KEY (asistencia_id)    REFERENCES asistencias(id),
+    CONSTRAINT ml_evidencia_id_fk     FOREIGN KEY (evidencia_id)     REFERENCES evidencias(id)
+);
+
+CREATE INDEX idx_ml_tipo_analisis_id ON registros_analisis_ml(tipo_analisis_id);
+CREATE INDEX idx_ml_estudiante_id    ON registros_analisis_ml(estudiante_id);
+CREATE INDEX idx_ml_fecha_analisis   ON registros_analisis_ml(fecha_analisis);
+
+
+-- -------------------------------------------------------
+-- TELEGRAM
+-- -------------------------------------------------------
+
+CREATE TABLE configuracion_telegram (
+    id                   SERIAL PRIMARY KEY,
+    chat_id              TEXT NOT NULL,
+    token_bot_encriptado TEXT,
+    tipo_destinatario    TEXT NOT NULL,
+    usuario_id           INTEGER,
+    representante_id     INTEGER,
+    nombre_destinatario  TEXT,
+    estado_integracion   TEXT NOT NULL DEFAULT 'activo',
+    verificado           BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_verificacion   TIMESTAMPTZ,
+    observaciones        TEXT,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at           TIMESTAMPTZ,
+    created_by           INTEGER,
+    updated_by           INTEGER,
+    CONSTRAINT telegram_tipo_destinatario_valido   CHECK (tipo_destinatario IN ('representante', 'docente', 'administrador')),
+    CONSTRAINT telegram_estado_integracion_valido  CHECK (estado_integracion IN ('activo', 'inactivo', 'error')),
+    CONSTRAINT telegram_chat_id_unique             UNIQUE (chat_id),
+    CONSTRAINT telegram_usuario_id_fk              FOREIGN KEY (usuario_id)       REFERENCES usuarios(id),
+    CONSTRAINT telegram_representante_id_fk        FOREIGN KEY (representante_id) REFERENCES representantes(id),
+    CONSTRAINT telegram_destinatario_referencia    CHECK (
+        (usuario_id IS NOT NULL AND representante_id IS NULL) OR
+        (usuario_id IS NULL     AND representante_id IS NOT NULL)
+    )
+);
+
+CREATE INDEX idx_telegram_chat_id         ON configuracion_telegram(chat_id);
+CREATE INDEX idx_telegram_representante   ON configuracion_telegram(representante_id);
+
+
+-- -------------------------------------------------------
+-- NOTIFICACIONES
+-- -------------------------------------------------------
+
+CREATE TABLE notificaciones (
+    id                        SERIAL PRIMARY KEY,
+    destinatario_id           INTEGER,
+    configuracion_telegram_id INTEGER,
+    mensaje                   TEXT NOT NULL,
+    tipo                      TEXT NOT NULL,
+    canal                     TEXT NOT NULL DEFAULT 'interna',
+    estado                    TEXT NOT NULL DEFAULT 'pendiente',
+    fecha_creacion            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    fecha_envio               TIMESTAMPTZ,
+    respuesta_telegram        TEXT,
+    mensaje_error             TEXT,
+    intentos                  INTEGER NOT NULL DEFAULT 0,
+    referencia_id             INTEGER,
+    referencia_tabla          TEXT,
+    created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by                INTEGER,
+    CONSTRAINT notificaciones_tipo_valido   CHECK (tipo   IN ('asistencia', 'incidente', 'calificacion', 'reunion', 'aviso_general')),
+    CONSTRAINT notificaciones_canal_valido  CHECK (canal  IN ('interna', 'telegram', 'ambos')),
+    CONSTRAINT notificaciones_estado_valido CHECK (estado IN ('pendiente', 'enviado', 'fallido', 'cancelado')),
+    CONSTRAINT notificaciones_intentos_positivos CHECK (intentos >= 0),
+    CONSTRAINT notificaciones_destinatario_id_fk           FOREIGN KEY (destinatario_id)           REFERENCES usuarios(id),
+    CONSTRAINT notificaciones_configuracion_telegram_id_fk FOREIGN KEY (configuracion_telegram_id) REFERENCES configuracion_telegram(id)
+);
+
+CREATE INDEX idx_notificaciones_estado          ON notificaciones(estado);
+CREATE INDEX idx_notificaciones_destinatario_id ON notificaciones(destinatario_id);
+CREATE INDEX idx_notificaciones_fecha_creacion  ON notificaciones(fecha_creacion);
+
+
+-- -------------------------------------------------------
+-- REPORTES
+-- -------------------------------------------------------
+
+CREATE TABLE reportes (
+    id               SERIAL PRIMARY KEY,
+    tipo_reporte_id  INTEGER NOT NULL,
+    titulo           TEXT NOT NULL,
+    descripcion      TEXT,
+    parametros       TEXT,
+    ruta_archivo_pdf TEXT,
+    url_archivo      TEXT,
+    estado           TEXT NOT NULL DEFAULT 'generado',
+    generado_por_id  INTEGER,
+    referencia_id    INTEGER,
+    referencia_tabla TEXT,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at       TIMESTAMPTZ,
+    created_by       INTEGER,
+    CONSTRAINT reportes_estado_valido CHECK (estado IN ('generado', 'enviado', 'archivado', 'error')),
+    CONSTRAINT reportes_tipo_reporte_id_fk  FOREIGN KEY (tipo_reporte_id) REFERENCES tipos_reporte(id),
+    CONSTRAINT reportes_generado_por_id_fk  FOREIGN KEY (generado_por_id) REFERENCES usuarios(id)
+);
+
+CREATE INDEX idx_reportes_tipo_reporte_id ON reportes(tipo_reporte_id);
+CREATE INDEX idx_reportes_generado_por_id ON reportes(generado_por_id);
+
+
+-- -------------------------------------------------------
+-- SINCRONIZACIÓN OFFLINE
+-- -------------------------------------------------------
+
+CREATE TABLE sincronizacion_pendiente (
+    id             SERIAL PRIMARY KEY,
+    tabla_afectada TEXT NOT NULL,
+    id_local       TEXT NOT NULL,
+    id_remoto      TEXT,
+    accion         TEXT NOT NULL,
+    payload        TEXT,
+    estado         TEXT NOT NULL DEFAULT 'pendiente',
+    intentos       INTEGER NOT NULL DEFAULT 0,
+    mensaje_error  TEXT,
+    usuario_id     INTEGER,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ultimo_intento TIMESTAMPTZ,
+    CONSTRAINT sync_accion_valida  CHECK (accion  IN ('crear', 'actualizar', 'eliminar')),
+    CONSTRAINT sync_estado_valido  CHECK (estado  IN ('pendiente', 'sincronizado', 'error', 'cancelado')),
+    CONSTRAINT sync_intentos_positivos CHECK (intentos >= 0)
+);
+
+CREATE INDEX idx_sync_estado      ON sincronizacion_pendiente(estado);
+CREATE INDEX idx_sync_usuario_id  ON sincronizacion_pendiente(usuario_id);
+CREATE INDEX idx_sync_tabla       ON sincronizacion_pendiente(tabla_afectada);
+
+
+-- -------------------------------------------------------
+-- AUDITORÍA
+-- -------------------------------------------------------
+
+CREATE TABLE auditoria (
+    id             SERIAL PRIMARY KEY,
+    usuario_id     INTEGER,
+    accion         TEXT NOT NULL,
+    tabla_afectada TEXT NOT NULL,
+    registro_id    TEXT,
+    valor_anterior TEXT,
+    valor_nuevo    TEXT,
+    ip_origen      TEXT,
+    user_agent     TEXT,
+    descripcion    TEXT,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT auditoria_accion_valida CHECK (accion IN ('crear', 'actualizar', 'eliminar', 'login', 'logout', 'acceso', 'otro'))
+);
+
+CREATE INDEX idx_auditoria_usuario_id     ON auditoria(usuario_id);
+CREATE INDEX idx_auditoria_tabla_afectada ON auditoria(tabla_afectada);
+CREATE INDEX idx_auditoria_created_at     ON auditoria(created_at);
+
+
+-- -------------------------------------------------------
+-- REUNIONES
+-- -------------------------------------------------------
+
+CREATE TABLE reuniones (
+    id               SERIAL PRIMARY KEY,
+    titulo           TEXT NOT NULL,
+    motivo           TEXT NOT NULL DEFAULT 'general',
+    descripcion      TEXT,
+    fecha_hora       TIMESTAMPTZ NOT NULL,
+    duracion_minutos INTEGER,
+    lugar            TEXT,
+    modalidad        TEXT NOT NULL DEFAULT 'presencial',
+    enlace_virtual   TEXT,
+    estado           TEXT NOT NULL DEFAULT 'programada',
+    conclusiones     TEXT,
+    acuerdos         TEXT,
+    curso_id         INTEGER,
+    creado_por_id    INTEGER,
+    reporte_acta_id  INTEGER,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at       TIMESTAMPTZ,
+    created_by       INTEGER,
+    updated_by       INTEGER,
+    CONSTRAINT reuniones_motivo_valido    CHECK (motivo   IN ('academico', 'conducta', 'asistencia', 'seguimiento', 'general', 'emergencia', 'otro')),
+    CONSTRAINT reuniones_modalidad_valida CHECK (modalidad IN ('presencial', 'virtual', 'mixta')),
+    CONSTRAINT reuniones_estado_valido    CHECK (estado   IN ('programada', 'realizada', 'cancelada', 'reprogramada', 'pendiente')),
+    CONSTRAINT reuniones_duracion_positiva CHECK (duracion_minutos IS NULL OR duracion_minutos > 0),
+    CONSTRAINT reuniones_enlace_si_virtual CHECK (
+        modalidad != 'virtual' OR enlace_virtual IS NOT NULL
+    ),
+    CONSTRAINT reuniones_curso_id_fk      FOREIGN KEY (curso_id)      REFERENCES cursos(id),
+    CONSTRAINT reuniones_creado_por_id_fk FOREIGN KEY (creado_por_id) REFERENCES usuarios(id)
+);
+
+CREATE INDEX idx_reuniones_fecha_hora ON reuniones(fecha_hora);
+CREATE INDEX idx_reuniones_estado     ON reuniones(estado);
+CREATE INDEX idx_reuniones_curso_id   ON reuniones(curso_id);
+
+CREATE TABLE reunion_estudiante (
+    id            SERIAL PRIMARY KEY,
+    reunion_id    INTEGER NOT NULL,
+    estudiante_id INTEGER NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by    INTEGER,
+    CONSTRAINT re_reunion_id_fk    FOREIGN KEY (reunion_id)    REFERENCES reuniones(id),
+    CONSTRAINT re_estudiante_id_fk FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id),
+    CONSTRAINT re_reunion_estudiante_unique UNIQUE (reunion_id, estudiante_id)
+);
+
+CREATE INDEX idx_re_reunion_id ON reunion_estudiante(reunion_id);
+
+CREATE TABLE reunion_representante (
+    id                  SERIAL PRIMARY KEY,
+    reunion_id          INTEGER NOT NULL,
+    representante_id    INTEGER NOT NULL,
+    convocado           BOOLEAN NOT NULL DEFAULT TRUE,
+    asistio             TEXT DEFAULT 'pendiente',
+    notificado_telegram BOOLEAN NOT NULL DEFAULT FALSE,
+    fecha_notificacion  TIMESTAMPTZ,
+    observaciones       TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by          INTEGER,
+    CONSTRAINT rr_asistio_valido CHECK (asistio IN ('pendiente', 'si', 'no', 'justificado') OR asistio IS NULL),
+    CONSTRAINT rr_reunion_id_fk          FOREIGN KEY (reunion_id)       REFERENCES reuniones(id),
+    CONSTRAINT rr_representante_id_fk    FOREIGN KEY (representante_id) REFERENCES representantes(id),
+    CONSTRAINT rr_reunion_representante_unique UNIQUE (reunion_id, representante_id)
+);
+
+CREATE INDEX idx_rr_reunion_id        ON reunion_representante(reunion_id);
+CREATE INDEX idx_rr_representante_id  ON reunion_representante(representante_id);
+
+CREATE TABLE docente_reunion (
+    id           SERIAL PRIMARY KEY,
+    reunion_id   INTEGER NOT NULL,
+    docente_id   INTEGER NOT NULL,
+    es_moderador BOOLEAN NOT NULL DEFAULT FALSE,
+    asistio      TEXT DEFAULT 'pendiente',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by   INTEGER,
+    CONSTRAINT dr_asistio_valido CHECK (asistio IN ('pendiente', 'si', 'no') OR asistio IS NULL),
+    CONSTRAINT dr_reunion_id_fk  FOREIGN KEY (reunion_id)  REFERENCES reuniones(id),
+    CONSTRAINT dr_docente_id_fk  FOREIGN KEY (docente_id)  REFERENCES usuarios(id),
+    CONSTRAINT dr_reunion_docente_unique UNIQUE (reunion_id, docente_id)
+);
+
+CREATE INDEX idx_dr_reunion_id ON docente_reunion(reunion_id);

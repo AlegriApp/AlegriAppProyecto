@@ -15,9 +15,13 @@ import com.example.myapplication.data.local.entity.StudentEntity
         AttendanceEntity::class,
         GradeEntity::class
     ],
-    version = 2,
+    version = 4,
     exportSchema = false
 )
+/**
+ * Room principal. La población demo se ejecuta en [com.example.myapplication.data.local.DatabaseSeeder]
+ * al crear la instancia vía [com.example.myapplication.core.di.AppModule].
+ */
 abstract class AppDatabase : RoomDatabase() {
     abstract fun studentDao(): StudentDao
     abstract fun attendanceDao(): AttendanceDao

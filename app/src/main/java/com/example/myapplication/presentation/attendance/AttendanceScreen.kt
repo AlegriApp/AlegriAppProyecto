@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.core.di.AppModule
 import com.example.myapplication.presentation.attendance.components.AttendanceListCard
+import com.example.myapplication.presentation.common.OfflineBanner
 import com.example.myapplication.ui.theme.MyApplicationTheme
 
 @Composable
@@ -51,7 +52,9 @@ fun AttendanceScreenRoute(
             getAttendanceByDateUseCase = AppModule.provideGetAttendanceByDateUseCase(context),
             saveAttendanceUseCase = AppModule.provideSaveAttendanceUseCase(context),
             recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context),
-            sendTelegramMessageUseCase = AppModule.provideSendTelegramMessageUseCase()
+            sendTelegramMessageUseCase = AppModule.provideSendTelegramMessageUseCase(),
+            networkMonitor = AppModule.provideNetworkMonitor(context),
+            syncRepository = AppModule.provideSyncRepository(context)
         )
     }
     AttendanceScreen(
@@ -130,6 +133,14 @@ fun AttendanceScreen(
                 contentPadding = PaddingValues(vertical = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
+                if (uiState.isOffline) {
+                    item {
+                        OfflineBanner(
+                            modifier = Modifier.widthIn(max = contentMaxWidth)
+                        )
+                    }
+                }
+
                 item {
                     Column(
                         modifier = Modifier
@@ -193,6 +204,18 @@ fun AttendanceScreen(
                 }
 
                 item {
+                    Button(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = contentMaxWidth),
+                        onClick = { viewModel.onEvent(AttendanceEvent.MarkAllPresent) },
+                        enabled = !uiState.isSaving && !uiState.isLoading && uiState.students.isNotEmpty()
+                    ) {
+                        Text("Marcar todos presente")
+                    }
+                }
+
+                item {
                     AttendanceListCard(
                         modifier = Modifier.widthIn(max = contentMaxWidth),
                         courseName = uiState.courseName,
@@ -204,7 +227,7 @@ fun AttendanceScreen(
                                 AttendanceStatus.PRESENT -> viewModel.onEvent(AttendanceEvent.MarkPresent(studentId))
                                 AttendanceStatus.LATE -> viewModel.onEvent(AttendanceEvent.MarkLate(studentId))
                                 AttendanceStatus.ABSENT -> viewModel.onEvent(AttendanceEvent.MarkAbsent(studentId))
-                                AttendanceStatus.JUSTIFIED -> viewModel.onEvent(AttendanceEvent.MarkAbsent(studentId))
+                                AttendanceStatus.JUSTIFIED -> viewModel.onEvent(AttendanceEvent.MarkJustified(studentId))
                                 AttendanceStatus.UNMARKED -> Unit
                             }
                         }
@@ -216,8 +239,22 @@ fun AttendanceScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .widthIn(max = contentMaxWidth),
+                        onClick = { viewModel.onEvent(AttendanceEvent.SaveAttendance) },
+                        enabled = !uiState.isSaving && !uiState.isLoading
+                    ) {
+                        Text(
+                            if (uiState.isSaving) "Guardando asistencia…" else "Guardar asistencia"
+                        )
+                    }
+                }
+
+                item {
+                    Button(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = contentMaxWidth),
                         onClick = { viewModel.onEvent(AttendanceEvent.SendReport) },
-                        enabled = !uiState.isSending
+                        enabled = !uiState.isSending && !uiState.isSaving && !uiState.isSaving
                     ) {
                         Text("Enviar reporte por Telegram")
                     }

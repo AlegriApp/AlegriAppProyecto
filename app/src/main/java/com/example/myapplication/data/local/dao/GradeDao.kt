@@ -25,6 +25,18 @@ interface GradeDao {
     )
     fun observeGradesBySubjectAndPeriod(subject: String, period: String): Flow<List<GradeEntity>>
 
+    @Query(
+        "SELECT * FROM calificaciones " +
+            "WHERE estudiante_id = :studentId AND materia_nombre = :subject " +
+            "AND periodo_nombre = :period AND descripcion = :description LIMIT 1"
+    )
+    suspend fun getByStudentSubjectPeriodAndDescription(
+        studentId: Long,
+        subject: String,
+        period: String,
+        description: String
+    ): GradeEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrReplaceGrade(grade: GradeEntity)
 
@@ -36,4 +48,7 @@ interface GradeDao {
 
     @Query("UPDATE calificaciones SET sincronizacion_pendiente = 0 WHERE id IN (:ids)")
     suspend fun markAsSynced(ids: List<Long>)
+
+    @Query("SELECT COUNT(*) FROM calificaciones")
+    suspend fun countGrades(): Int
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -27,6 +28,7 @@ import com.example.myapplication.ui.theme.MyApplicationTheme
 fun GradeStudentCard(
     student: GradeStudentMock,
     onOpenDetail: (Long) -> Unit,
+    onEdit: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -61,6 +63,13 @@ fun GradeStudentCard(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
+            IconButton(onClick = { onEdit(student.id) }) {
+                Icon(
+                    imageVector = Icons.Filled.Edit,
+                    contentDescription = "Editar nota",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
             IconButton(onClick = { onOpenDetail(student.id) }) {
                 Icon(
                     imageVector = Icons.Filled.ChevronRight,
@@ -83,7 +92,8 @@ private fun GradeStudentCardPreview() {
                 score = 18,
                 status = GradeVisualStatus.APPROVED
             ),
-            onOpenDetail = {}
+            onOpenDetail = {},
+            onEdit = {}
         )
     }
 }

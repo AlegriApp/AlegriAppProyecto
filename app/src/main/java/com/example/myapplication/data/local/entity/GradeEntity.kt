@@ -11,7 +11,11 @@ import androidx.room.PrimaryKey
         Index(value = ["estudiante_id"]),
         Index(value = ["materia_id"]),
         Index(value = ["curso_id"]),
-        Index(value = ["periodo_academico_id"])
+        Index(value = ["periodo_academico_id"]),
+        Index(
+            value = ["estudiante_id", "materia_nombre", "periodo_nombre", "descripcion"],
+            unique = true
+        )
     ]
 )
 data class GradeEntity(

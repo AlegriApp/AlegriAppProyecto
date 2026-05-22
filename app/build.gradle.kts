@@ -27,8 +27,21 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         val telegramToken = (localProperties.getProperty("TELEGRAM_BOT_TOKEN") ?: "").replace("\"", "\\\"")
         val telegramChatId = (localProperties.getProperty("TELEGRAM_CHAT_ID") ?: "").replace("\"", "\\\"")
+        val supabaseUrl = (localProperties.getProperty("SUPABASE_URL")
+            ?: "https://nqtobrslyrfwcuexffdu.supabase.co/rest/v1/").replace("\"", "\\\"")
+        val supabaseKey = (localProperties.getProperty("SUPABASE_KEY") ?: "").replace("\"", "\\\"")
+        val defaultCursoId = localProperties.getProperty("SUPABASE_DEFAULT_CURSO_ID") ?: "1"
+        val defaultMateriaId = localProperties.getProperty("SUPABASE_DEFAULT_MATERIA_ID") ?: "1"
+        val defaultTipoEvalId = localProperties.getProperty("SUPABASE_DEFAULT_TIPO_EVALUACION_ID") ?: "6"
+        val defaultPeriodoId = localProperties.getProperty("SUPABASE_DEFAULT_PERIODO_ID") ?: "1"
         buildConfigField("String", "TELEGRAM_BOT_TOKEN", "\"$telegramToken\"")
         buildConfigField("String", "TELEGRAM_DEFAULT_CHAT_ID", "\"$telegramChatId\"")
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
+        buildConfigField("long", "SUPABASE_DEFAULT_CURSO_ID", "${defaultCursoId}L")
+        buildConfigField("long", "SUPABASE_DEFAULT_MATERIA_ID", "${defaultMateriaId}L")
+        buildConfigField("long", "SUPABASE_DEFAULT_TIPO_EVALUACION_ID", "${defaultTipoEvalId}L")
+        buildConfigField("long", "SUPABASE_DEFAULT_PERIODO_ID", "${defaultPeriodoId}L")
     }
 
     buildTypes {

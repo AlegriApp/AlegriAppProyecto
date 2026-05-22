@@ -22,8 +22,8 @@ fun GradeEntity.toDomain(): Grade = Grade(
     syncPending = syncPending
 )
 
-fun Grade.toEntity(): GradeEntity = GradeEntity(
-    id = id,
+fun Grade.toEntity(existingId: Long? = null): GradeEntity = GradeEntity(
+    id = existingId ?: id,
     studentId = studentId,
     subjectId = subjectId,
     courseId = courseId,
