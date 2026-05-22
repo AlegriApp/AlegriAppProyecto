@@ -1,68 +1,45 @@
 package com.example.myapplication.presentation.incidents
 
-import androidx.compose.runtime.saveable.listSaver
+import com.example.myapplication.domain.model.Incident
+import com.example.myapplication.domain.model.IncidentSeverity
+import com.example.myapplication.domain.model.IncidentType
+import com.example.myapplication.domain.model.Student
 
 data class IncidentUiState(
-    val appTitle: String = "AlegriApp",
-    val appSubtitle: String = "Sistema de Comunicaci\u00f3n Docente - Fe y Alegr\u00eda",
     val screenTitle: String = "Reporte de Incidentes",
-    val screenDescription: String = "Env\u00edo directo a autoridades y representantes v\u00eda Telegram",
-    val students: List<IncidentStudentUi> = incidentMockStudents,
+    val screenDescription: String = "Envio directo a autoridades y representantes via Telegram",
+    val students: List<Student> = emptyList(),
+    val incidents: List<IncidentHistoryItem> = emptyList(),
     val selectedStudentId: Long? = null,
-    val selectedType: IncidentTypeOption = IncidentTypeOption.BEHAVIOR,
-    val description: String = ""
+    val selectedType: IncidentType? = null,
+    val selectedSeverity: IncidentSeverity = IncidentSeverity.MEDIUM,
+    val description: String = "",
+    val lastSavedIncidentId: Long? = null,
+    val isLoadingStudents: Boolean = false,
+    val isLoadingIncidents: Boolean = false,
+    val isSaving: Boolean = false,
+    val sendStatus: IncidentSendStatus = IncidentSendStatus.Idle,
+    val studentError: String? = null,
+    val typeError: String? = null,
+    val descriptionError: String? = null,
+    val errorMessage: String? = null,
+    val successMessage: String? = null
 ) {
-    companion object {
-        val Saver = listSaver<IncidentUiState, Any?>(
-            save = { state ->
-                listOf(
-                    state.appTitle,
-                    state.appSubtitle,
-                    state.screenTitle,
-                    state.screenDescription,
-                    state.students.flatMap { student -> listOf(student.id, student.name) },
-                    state.selectedStudentId,
-                    state.selectedType.name,
-                    state.description
-                )
-            },
-            restore = { restored ->
-                val flattenedStudents = restored[4] as List<*>
-                IncidentUiState(
-                    appTitle = restored[0] as String,
-                    appSubtitle = restored[1] as String,
-                    screenTitle = restored[2] as String,
-                    screenDescription = restored[3] as String,
-                    students = flattenedStudents.chunked(2).map { studentFields ->
-                        IncidentStudentUi(
-                            id = studentFields[0] as Long,
-                            name = studentFields[1] as String
-                        )
-                    },
-                    selectedStudentId = restored[5] as Long?,
-                    selectedType = IncidentTypeOption.valueOf(restored[6] as String),
-                    description = restored[7] as String
-                )
-            }
-        )
-    }
+    val selectedStudent: Student?
+        get() = students.firstOrNull { it.id == selectedStudentId }
+
+    val canSubmit: Boolean
+        get() = !isLoadingStudents && !isSaving && sendStatus !is IncidentSendStatus.Sending
 }
 
-data class IncidentStudentUi(
-    val id: Long,
-    val name: String
+data class IncidentHistoryItem(
+    val incident: Incident,
+    val studentName: String
 )
 
-enum class IncidentTypeOption(val label: String) {
-    BEHAVIOR("Comportamiento"),
-    ACADEMIC("Acad\u00e9mico"),
-    HEALTH("Salud"),
-    OTHER("Otro")
+sealed interface IncidentSendStatus {
+    data object Idle : IncidentSendStatus
+    data object Sending : IncidentSendStatus
+    data object Success : IncidentSendStatus
+    data class Error(val message: String) : IncidentSendStatus
 }
-
-val incidentMockStudents = listOf(
-    IncidentStudentUi(1L, "Mar\u00eda Gonz\u00e1lez"),
-    IncidentStudentUi(2L, "Juan P\u00e9rez"),
-    IncidentStudentUi(3L, "Ana Rodr\u00edguez"),
-    IncidentStudentUi(4L, "Carlos Mart\u00ednez")
-)

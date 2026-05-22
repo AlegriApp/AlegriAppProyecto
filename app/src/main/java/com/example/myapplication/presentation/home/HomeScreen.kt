@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Grading
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
@@ -47,15 +48,15 @@ fun HomeScreen(
                     .fillMaxSize()
                     .padding(horizontal = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                contentPadding = PaddingValues(vertical = 24.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(top = 64.dp, bottom = 24.dp)
             ) {
                 item {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .widthIn(max = 560.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalAlignment = Alignment.Start
                     ) {
                         Text(
@@ -69,36 +70,58 @@ fun HomeScreen(
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
 
-                        HomeModuleCard(
+                items(
+                    items = listOf(
+                        HomeModule(
                             title = "Asistencias",
                             description = "Abrir la interfaz de toma de asistencia.",
                             buttonLabel = "Ir a asistencias",
                             icon = Icons.Filled.AssignmentTurnedIn,
                             onClick = onOpenAttendance
-                        )
-
-                        HomeModuleCard(
+                        ),
+                        HomeModule(
                             title = "Calificaciones",
-                            description = "Abrir la pantalla de registro acad\u00e9mico.",
+                            description = "Abrir la pantalla de registro academico.",
                             buttonLabel = "Ir a calificaciones",
                             icon = Icons.AutoMirrored.Filled.Grading,
                             onClick = onOpenGrades
-                        )
-
-                        HomeModuleCard(
+                        ),
+                        HomeModule(
                             title = "Incidentes",
-                            description = "Abrir la interfaz de reporte de incidentes.",
+                            description = "Registrar y enviar reportes de incidentes.",
                             buttonLabel = "Ir a incidentes",
                             icon = Icons.Outlined.ReportProblem,
                             onClick = onOpenIncidents
                         )
-                    }
+                    ),
+                    key = { it.title }
+                ) { module ->
+                    HomeModuleCard(
+                        title = module.title,
+                        description = module.description,
+                        buttonLabel = module.buttonLabel,
+                        icon = module.icon,
+                        onClick = module.onClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 560.dp)
+                    )
                 }
             }
         }
     }
 }
+
+private data class HomeModule(
+    val title: String,
+    val description: String,
+    val buttonLabel: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val onClick: () -> Unit
+)
 
 @Composable
 private fun HomeModuleCard(
@@ -106,18 +129,19 @@ private fun HomeModuleCard(
     description: String,
     buttonLabel: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Icon(
                 imageVector = icon,

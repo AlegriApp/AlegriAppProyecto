@@ -2,8 +2,10 @@ package com.example.myapplication.services.telegram
 
 import com.example.myapplication.domain.model.Attendance
 import com.example.myapplication.domain.model.AttendanceStatus
+import com.example.myapplication.domain.model.Incident
 import com.example.myapplication.domain.model.Student
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 object TelegramMessageBuilder {
@@ -65,6 +67,27 @@ object TelegramMessageBuilder {
         val maxScore: Double
     )
 
+    fun buildIncidentReport(
+        student: Student,
+        incident: Incident
+    ): String {
+        val message = buildString {
+            appendLine("AlegriAPP - Reporte de Incidente")
+            appendLine("Estudiante: ${sanitize(student.fullName)}")
+            appendLine("Curso: ${sanitize(student.grade)} ${sanitize(student.section)}".trim())
+            appendLine("Tipo: ${incident.type.label}")
+            appendLine("Severidad: ${incident.severity.label}")
+            appendLine("Fecha y hora: ${humanDateTime(incident.dateTime)}")
+            if (!incident.teacherName.isNullOrBlank()) {
+                appendLine("Docente: ${sanitize(incident.teacherName)}")
+            }
+            appendLine()
+            appendLine("Descripcion:")
+            appendLine(sanitize(incident.description))
+        }
+        return truncateMessage(message)
+    }
+
     private fun truncateMessage(message: String): String {
         if (message.length <= MAX_MESSAGE_LENGTH) return message
         val suffix = "\n...(mensaje truncado)"
@@ -76,6 +99,11 @@ object TelegramMessageBuilder {
     private fun humanDate(date: String): String {
         val parsed = runCatching { LocalDate.parse(date, DateTimeFormatter.ISO_LOCAL_DATE) }.getOrNull()
         return parsed?.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) ?: date
+    }
+
+    private fun humanDateTime(dateTime: String): String {
+        val parsed = runCatching { LocalDateTime.parse(dateTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME) }.getOrNull()
+        return parsed?.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) ?: dateTime
     }
 
     private fun attendanceStatusLabel(status: AttendanceStatus): String = when (status) {

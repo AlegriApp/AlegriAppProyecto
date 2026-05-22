@@ -10,7 +10,7 @@ import com.example.myapplication.presentation.attendance.AttendanceScreenRoute
 import com.example.myapplication.presentation.grades.GradeDetailScreen
 import com.example.myapplication.presentation.grades.GradesScreenRoute
 import com.example.myapplication.presentation.home.HomeScreen
-import com.example.myapplication.presentation.incidents.IncidentScreen
+import com.example.myapplication.presentation.incidents.IncidentScreenRoute
 
 @Composable
 fun AppNavGraph() {
@@ -44,7 +44,7 @@ fun AppNavGraph() {
         }
 
         composable(AppRoutes.Incidents) {
-            IncidentScreen(
+            IncidentScreenRoute(
                 onBack = { navController.popBackStack() }
             )
         }
