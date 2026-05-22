@@ -10,6 +10,7 @@ import com.example.myapplication.core.network.RetrofitClient
 import com.example.myapplication.data.remote.api.SupabaseApiService
 import com.example.myapplication.data.repository.AttendanceRepositoryImpl
 import com.example.myapplication.data.repository.GradeRepositoryImpl
+import com.example.myapplication.data.repository.IncidentRepositoryImpl
 import com.example.myapplication.data.repository.OcrRepositoryImpl
 import com.example.myapplication.data.repository.StudentRepositoryImpl
 import com.example.myapplication.data.repository.SyncRepositoryImpl
@@ -18,6 +19,7 @@ import com.example.myapplication.data.remote.api.TelegramApiService
 import com.example.myapplication.domain.repository.SyncRepository
 import com.example.myapplication.domain.repository.AttendanceRepository
 import com.example.myapplication.domain.repository.GradeRepository
+import com.example.myapplication.domain.repository.IncidentRepository
 import com.example.myapplication.domain.repository.OcrRepository
 import com.example.myapplication.domain.repository.StudentRepository
 import com.example.myapplication.domain.repository.TelegramRepository
@@ -25,6 +27,8 @@ import com.example.myapplication.domain.usecase.attendance.GetAttendanceByDateUs
 import com.example.myapplication.domain.usecase.attendance.SaveAttendanceUseCase
 import com.example.myapplication.domain.usecase.grade.GetGradesBySubjectAndPeriodUseCase
 import com.example.myapplication.domain.usecase.grade.SaveGradeUseCase
+import com.example.myapplication.domain.usecase.incidents.SaveIncidentUseCase
+import com.example.myapplication.domain.usecase.incidents.SendIncidentReportUseCase
 import com.example.myapplication.domain.usecase.ocr.RecognizeTextFromImageUseCase
 import com.example.myapplication.domain.usecase.student.GetStudentsUseCase
 import com.example.myapplication.domain.usecase.telegram.SendTelegramMessageUseCase
@@ -101,6 +105,11 @@ object AppModule {
             gradeDao = provideDatabase(context).gradeDao()
         )
 
+    fun provideIncidentRepository(context: Context): IncidentRepository =
+        IncidentRepositoryImpl(
+            incidentDao = provideDatabase(context).incidentDao()
+        )
+
     fun provideGetStudentsUseCase(context: Context): GetStudentsUseCase =
         GetStudentsUseCase(provideStudentRepository(context))
 
@@ -115,6 +124,16 @@ object AppModule {
 
     fun provideSaveGradeUseCase(context: Context): SaveGradeUseCase =
         SaveGradeUseCase(provideGradeRepository(context))
+
+    fun provideSaveIncidentUseCase(context: Context): SaveIncidentUseCase =
+        SaveIncidentUseCase(provideIncidentRepository(context))
+
+    fun provideSendIncidentReportUseCase(context: Context): SendIncidentReportUseCase =
+        SendIncidentReportUseCase(
+            sendTelegramMessageUseCase = provideSendTelegramMessageUseCase(),
+            incidentRepository = provideIncidentRepository(context),
+            defaultChatId = BuildConfig.TELEGRAM_DEFAULT_CHAT_ID
+        )
 
     fun provideOcrRepository(context: Context): OcrRepository =
         OcrRepositoryImpl(
