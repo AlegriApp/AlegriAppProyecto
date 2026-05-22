@@ -5,4 +5,5 @@ import kotlinx.coroutines.flow.Flow
 
 interface StudentRepository {
     fun observeStudents(): Flow<List<Student>>
+    suspend fun upsertStudents(students: List<Student>)
 }

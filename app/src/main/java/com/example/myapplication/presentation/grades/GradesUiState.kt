@@ -24,6 +24,8 @@ data class GradesUiState(
     val isSending: Boolean = false,
     val isProcessingOcr: Boolean = false,
     val detectedOcrText: String = "",
+    val editingStudentId: Long? = null,
+    val hasUnsavedEdits: Boolean = false,
     val errorMessage: String? = null,
     val successMessage: String? = null,
     val isOffline: Boolean = false

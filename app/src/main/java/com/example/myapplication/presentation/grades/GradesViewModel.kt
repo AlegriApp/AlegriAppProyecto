@@ -2,17 +2,21 @@ package com.example.myapplication.presentation.grades
 
 import android.net.Uri
 import com.example.myapplication.BuildConfig
+import com.example.myapplication.core.network.NetworkMonitor
+import com.example.myapplication.domain.model.sync.SyncOutcome
+import com.example.myapplication.domain.repository.SyncRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.domain.model.Student
 import com.example.myapplication.domain.model.Grade
-import com.example.myapplication.presentation.grades.components.GradeStudentMock
-import com.example.myapplication.presentation.grades.components.GradeVisualStatus
+import com.example.myapplication.domain.model.Student
 import com.example.myapplication.domain.usecase.grade.GetGradesBySubjectAndPeriodUseCase
 import com.example.myapplication.domain.usecase.grade.SaveGradeUseCase
 import com.example.myapplication.domain.usecase.ocr.RecognizeTextFromImageUseCase
 import com.example.myapplication.domain.usecase.student.GetStudentsUseCase
+import com.example.myapplication.domain.model.telegram.TelegramSendOutcome
 import com.example.myapplication.domain.usecase.telegram.SendTelegramMessageUseCase
+import com.example.myapplication.presentation.grades.components.GradeStudentMock
+import com.example.myapplication.presentation.grades.components.GradeVisualStatus
 import com.example.myapplication.services.telegram.TelegramMessageBuilder
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +32,8 @@ class GradesViewModel(
     private val saveGradeUseCase: SaveGradeUseCase,
     private val recognizeTextFromImageUseCase: RecognizeTextFromImageUseCase,
     private val sendTelegramMessageUseCase: SendTelegramMessageUseCase,
+    private val networkMonitor: NetworkMonitor? = null,
+    private val syncRepository: SyncRepository? = null,
     initialState: GradesUiState = GradesUiState()
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(initialState)
@@ -35,8 +41,17 @@ class GradesViewModel(
     private var observeJob: Job? = null
 
     private var gradeStore: List<Grade> = emptyList()
+    private var pendingEdits: Map<Long, GradeEditDraft> = emptyMap()
+    private var hasPendingLocalEdits = false
 
     init {
+        networkMonitor?.let { monitor ->
+            viewModelScope.launch {
+                monitor.isOnline.collect { online ->
+                    _uiState.update { it.copy(isOffline = !online) }
+                }
+            }
+        }
         viewModelScope.launch {
             getStudentsUseCase().collect { students ->
                 val defaultSubject = _uiState.value.selectedSubject.takeIf { it.isNotBlank() } ?: "General"
@@ -64,28 +79,39 @@ class GradesViewModel(
         when (event) {
             GradesEvent.LoadData -> loadData()
             is GradesEvent.SubjectSelected -> {
+                clearPendingEdits()
                 _uiState.update { it.copy(selectedSubject = event.subject) }
                 observeGrades(event.subject, _uiState.value.selectedPeriod)
             }
 
             is GradesEvent.PeriodSelected -> {
+                clearPendingEdits()
                 _uiState.update { it.copy(selectedPeriod = event.period) }
                 observeGrades(_uiState.value.selectedSubject, event.period)
             }
 
             is GradesEvent.EditGrade -> {
-                updateGrade(
+                applyPendingEdit(
                     studentId = event.studentId,
-                    activityName = event.activityName,
-                    activityType = event.activityType,
                     score = event.score,
-                    maxScore = event.maxScore
+                    maxScore = event.maxScore,
+                    activityName = event.activityName,
+                    activityType = event.activityType
                 )
+            }
+
+            is GradesEvent.OpenEditDialog -> {
+                _uiState.update { it.copy(editingStudentId = event.studentId) }
+            }
+
+            GradesEvent.DismissEditDialog -> {
+                _uiState.update { it.copy(editingStudentId = null) }
             }
 
             GradesEvent.RefreshAverages -> refreshDerivedMetrics()
             is GradesEvent.OpenDetail -> Unit
             is GradesEvent.OcrImageSelected -> processOcr(event.uri)
+            GradesEvent.ApplyOcrSuggestions -> applyOcrSuggestions()
             GradesEvent.SaveGrades -> saveGrades()
             GradesEvent.SendBulletinClicked -> sendBulletin()
             GradesEvent.ClearMessages -> {
@@ -110,14 +136,16 @@ class GradesViewModel(
             ) { students, grades ->
                 students to grades
             }.collect { (students, grades) ->
-                gradeStore = grades
+                if (!hasPendingLocalEdits) {
+                    gradeStore = grades
+                }
                 val subjects = (grades.map { it.subject } + subject).distinct()
                 val periods = (grades.map { it.period } + period).distinct()
                 _uiState.update {
                     it.copy(
                         studentsDomain = students,
                         students = studentsFromDomain(students),
-                        gradesDomain = grades,
+                        gradesDomain = if (hasPendingLocalEdits) it.gradesDomain else grades,
                         subjects = subjects,
                         periods = periods,
                         selectedSubject = subject,
@@ -130,37 +158,33 @@ class GradesViewModel(
         }
     }
 
-    private fun updateGrade(
+    private fun applyPendingEdit(
         studentId: Long,
-        activityName: String,
-        activityType: String,
         score: Double,
-        maxScore: Double
+        maxScore: Double,
+        activityName: String,
+        activityType: String
     ) {
         val normalizedScore = score.coerceIn(0.0, maxScore)
-        val subject = _uiState.value.selectedSubject
-        val period = _uiState.value.selectedPeriod
-
-        viewModelScope.launch {
-            runCatching {
-                saveGradeUseCase(
-                    Grade(
-                        studentId = studentId,
-                        subject = subject,
-                        period = period,
-                        activityName = activityName,
-                        activityType = activityType,
-                        score = normalizedScore,
-                        maxScore = maxScore,
-                        syncPending = true
-                    )
-                )
-            }.onFailure { throwable ->
-                _uiState.update { state ->
-                    state.copy(errorMessage = throwable.message ?: "No se pudo guardar la calificación.")
-                }
-            }
+        hasPendingLocalEdits = true
+        pendingEdits = pendingEdits + (
+            studentId to GradeEditDraft(
+                studentId = studentId,
+                activityName = activityName,
+                activityType = activityType,
+                score = normalizedScore,
+                maxScore = maxScore
+            )
+            )
+        _uiState.update {
+            it.copy(
+                editingStudentId = null,
+                hasUnsavedEdits = true,
+                errorMessage = null,
+                successMessage = null
+            )
         }
+        refreshDerivedMetrics()
     }
 
     private fun refreshDerivedMetrics() {
@@ -171,12 +195,22 @@ class GradesViewModel(
         val gradesByStudent = filtered
             .groupBy { it.studentId }
             .mapValues { (_, values) -> values.map { it.score }.average().takeIf { !it.isNaN() } ?: 0.0 }
+            .toMutableMap()
+
+        pendingEdits.values.forEach { draft ->
+            gradesByStudent[draft.studentId] = draft.score
+        }
+
         val classAverage = gradesByStudent.values.average().takeIf { !it.isNaN() } ?: 0.0
+        val maxScore = pendingEdits.values.firstOrNull()?.maxScore
+            ?: filtered.firstOrNull()?.maxScore
+            ?: GradeEditDraft.DEFAULT_MAX_SCORE
 
         val updatedStudents = state.students.map { student ->
             val score = gradesByStudent[student.id]
             student.copy(
                 score = score?.toInt(),
+                maxScore = maxScore.toInt(),
                 status = when {
                     score == null -> GradeVisualStatus.NOT_REGISTERED
                     score < 10.0 -> GradeVisualStatus.AT_RISK
@@ -201,11 +235,58 @@ class GradesViewModel(
     private fun saveGrades() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, errorMessage = null, successMessage = null) }
-            _uiState.update {
-                it.copy(
-                    isSaving = false,
-                    successMessage = "Calificaciones actualizadas en almacenamiento local."
-                )
+            if (pendingEdits.isEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        errorMessage = "No hay calificaciones pendientes por guardar."
+                    )
+                }
+                return@launch
+            }
+
+            val subject = _uiState.value.selectedSubject
+            val period = _uiState.value.selectedPeriod
+
+            runCatching {
+                pendingEdits.values.forEach { draft ->
+                    saveGradeUseCase(
+                        Grade(
+                            studentId = draft.studentId,
+                            subject = subject,
+                            period = period,
+                            activityName = draft.activityName,
+                            activityType = draft.activityType,
+                            score = draft.score,
+                            maxScore = draft.maxScore,
+                            syncPending = true
+                        )
+                    )
+                }
+            }.onSuccess {
+                hasPendingLocalEdits = false
+                pendingEdits = emptyMap()
+                val syncMessage = syncRepository?.syncPendingRecords()?.let { outcome ->
+                    when (outcome) {
+                        is SyncOutcome.Success -> " ${outcome.message}"
+                        is SyncOutcome.Skipped -> ""
+                        is SyncOutcome.Failure -> " (sync: ${outcome.message})"
+                    }
+                }.orEmpty()
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        hasUnsavedEdits = false,
+                        successMessage = "Calificaciones guardadas correctamente.$syncMessage"
+                    )
+                }
+            }.onFailure { throwable ->
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        errorMessage = throwable.message ?: "No se pudieron guardar las calificaciones."
+                    )
+                }
             }
         }
     }
@@ -214,17 +295,31 @@ class GradesViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isSending = true, errorMessage = null, successMessage = null) }
             val state = _uiState.value
+            if (state.hasUnsavedEdits) {
+                _uiState.update {
+                    it.copy(
+                        isSending = false,
+                        errorMessage = "Guarda las calificaciones antes de enviar el boletín."
+                    )
+                }
+                return@launch
+            }
+
             val filteredGrades = state.gradesDomain.filter {
                 it.subject == state.selectedSubject && it.period == state.selectedPeriod
             }
             val gradesByStudent = filteredGrades.groupBy { it.studentId }
             val reportRecords = state.studentsDomain.mapNotNull { student ->
-                val grade = gradesByStudent[student.id]
-                    ?.firstOrNull()
-                    ?.copy(score = gradesByStudent[student.id]!!.map { it.score }.average())
-                    ?: return@mapNotNull null
-                student to grade
+                val studentGrades = gradesByStudent[student.id] ?: return@mapNotNull null
+                val average = studentGrades.map { it.score }.average()
+                val maxScore = studentGrades.maxOf { it.maxScore }
+                TelegramMessageBuilder.GradeReportRecord(
+                    student = student,
+                    averageScore = average,
+                    maxScore = maxScore
+                )
             }
+
             if (reportRecords.isEmpty()) {
                 _uiState.update {
                     it.copy(
@@ -234,21 +329,31 @@ class GradesViewModel(
                 }
                 return@launch
             }
+
             val message = TelegramMessageBuilder.buildGradeReport(
                 subject = state.selectedSubject,
                 period = state.selectedPeriod,
                 records = reportRecords
             )
-            val sent = sendTelegramMessageUseCase(BuildConfig.TELEGRAM_DEFAULT_CHAT_ID, message)
-            _uiState.update {
-                it.copy(
-                    isSending = false,
-                    successMessage = if (sent) "Boletín enviado por Telegram."
-                    else "Boletín preparado, pero no se pudo enviar por Telegram.",
-                    errorMessage = if (!sent) {
-                        "Verifica TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID en local.properties."
-                    } else null
-                )
+            when (val outcome = sendTelegramMessageUseCase(BuildConfig.TELEGRAM_DEFAULT_CHAT_ID, message)) {
+                is TelegramSendOutcome.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isSending = false,
+                            successMessage = "Boletín enviado por Telegram.",
+                            errorMessage = null
+                        )
+                    }
+                }
+                is TelegramSendOutcome.Failure -> {
+                    _uiState.update {
+                        it.copy(
+                            isSending = false,
+                            successMessage = null,
+                            errorMessage = outcome.message
+                        )
+                    }
+                }
             }
         }
     }
@@ -262,7 +367,7 @@ class GradesViewModel(
                     it.copy(
                         isProcessingOcr = false,
                         detectedOcrText = ocr.rawText,
-                        successMessage = "OCR completado. Revisa texto detectado para registrar notas."
+                        successMessage = "OCR completado. Revisa y pulsa Aplicar sugerencias."
                     )
                 }
             }.onFailure { throwable ->
@@ -276,7 +381,61 @@ class GradesViewModel(
         }
     }
 
-    private fun studentsFromDomain(students: List<com.example.myapplication.domain.model.Student>): List<GradeStudentMock> =
+    private fun applyOcrSuggestions() {
+        val state = _uiState.value
+        if (state.detectedOcrText.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "No hay texto OCR para procesar.") }
+            return
+        }
+
+        val lines = state.detectedOcrText
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toList()
+
+        val updates = state.students.mapNotNull { student ->
+            inferScoreFromOcr(student.name, lines)?.let { score ->
+                student.id to GradeEditDraft(
+                    studentId = student.id,
+                    score = score.coerceIn(0.0, GradeEditDraft.DEFAULT_MAX_SCORE),
+                    maxScore = GradeEditDraft.DEFAULT_MAX_SCORE
+                )
+            }
+        }.toMap()
+
+        if (updates.isEmpty()) {
+            _uiState.update {
+                it.copy(errorMessage = "No se detectaron notas en el texto OCR. Edita manualmente.")
+            }
+            return
+        }
+
+        hasPendingLocalEdits = true
+        pendingEdits = pendingEdits + updates
+        _uiState.update {
+            it.copy(
+                hasUnsavedEdits = true,
+                successMessage = "Sugerencias OCR aplicadas. Verifica y guarda."
+            )
+        }
+        refreshDerivedMetrics()
+    }
+
+    private fun inferScoreFromOcr(studentName: String, lines: List<String>): Double? {
+        val studentKey = studentName.lowercase()
+        val line = lines.firstOrNull { it.lowercase().contains(studentKey) } ?: return null
+        val number = Regex("""(\d+(?:[.,]\d+)?)""").findAll(line).map { it.value.replace(',', '.') }.lastOrNull()
+        return number?.toDoubleOrNull()
+    }
+
+    private fun clearPendingEdits() {
+        hasPendingLocalEdits = false
+        pendingEdits = emptyMap()
+        _uiState.update { it.copy(hasUnsavedEdits = false, editingStudentId = null) }
+    }
+
+    private fun studentsFromDomain(students: List<Student>): List<GradeStudentMock> =
         students.map { student ->
             GradeStudentMock(
                 id = student.id,

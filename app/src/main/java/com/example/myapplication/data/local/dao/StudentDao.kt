@@ -18,4 +18,7 @@ interface StudentDao {
 
     @Query("SELECT * FROM students WHERE id = :studentId LIMIT 1")
     suspend fun getStudentById(studentId: Long): StudentEntity?
+
+    @Query("SELECT COUNT(*) FROM students")
+    suspend fun countStudents(): Int
 }

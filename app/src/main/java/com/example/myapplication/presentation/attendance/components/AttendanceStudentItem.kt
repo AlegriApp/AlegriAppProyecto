@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -84,6 +85,21 @@ fun AttendanceStudentItem(
                 containerColor = MaterialTheme.colorScheme.errorContainer,
                 contentColor = MaterialTheme.colorScheme.onErrorContainer,
                 onClick = { onStatusSelected(AttendanceStatus.ABSENT) }
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AttendanceActionButton(
+                modifier = Modifier.fillMaxWidth(),
+                text = "Justificado",
+                icon = Icons.Filled.Description,
+                selected = selectedStatus == AttendanceStatus.JUSTIFIED,
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                onClick = { onStatusSelected(AttendanceStatus.JUSTIFIED) }
             )
         }
     }

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ImageSearch
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,15 +25,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +46,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.core.di.AppModule
+import com.example.myapplication.presentation.common.OfflineBanner
 import com.example.myapplication.presentation.grades.components.GradeFilterSection
 import com.example.myapplication.presentation.grades.components.GradeStudentCard
 import com.example.myapplication.presentation.grades.components.GradeSummaryCard
@@ -59,7 +65,9 @@ fun GradesScreen(
             getGradesBySubjectAndPeriodUseCase = AppModule.provideGetGradesBySubjectAndPeriodUseCase(context),
             saveGradeUseCase = AppModule.provideSaveGradeUseCase(context),
             recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context),
-            sendTelegramMessageUseCase = AppModule.provideSendTelegramMessageUseCase()
+            sendTelegramMessageUseCase = AppModule.provideSendTelegramMessageUseCase(),
+            networkMonitor = AppModule.provideNetworkMonitor(context),
+            syncRepository = AppModule.provideSyncRepository(context)
         )
     }
     GradesScreenContent(
@@ -81,7 +89,9 @@ fun GradesScreenRoute(
             getGradesBySubjectAndPeriodUseCase = AppModule.provideGetGradesBySubjectAndPeriodUseCase(context),
             saveGradeUseCase = AppModule.provideSaveGradeUseCase(context),
             recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context),
-            sendTelegramMessageUseCase = AppModule.provideSendTelegramMessageUseCase()
+            sendTelegramMessageUseCase = AppModule.provideSendTelegramMessageUseCase(),
+            networkMonitor = AppModule.provideNetworkMonitor(context),
+            syncRepository = AppModule.provideSyncRepository(context)
         )
     }
     GradesScreenContent(
@@ -112,6 +122,29 @@ private fun GradesScreenContent(
     LaunchedEffect(uiState.errorMessage, uiState.successMessage) {
         uiState.errorMessage?.let { snackbarHostState.showSnackbar(it) }
         uiState.successMessage?.let { snackbarHostState.showSnackbar(it) }
+    }
+
+    val editingStudent = uiState.editingStudentId?.let { id ->
+        students.firstOrNull { it.id == id }
+    }
+    if (editingStudent != null) {
+        GradeEditDialog(
+            studentName = editingStudent.name,
+            initialScore = editingStudent.score?.toString() ?: "",
+            maxScore = editingStudent.maxScore,
+            onDismiss = { viewModel.onEvent(GradesEvent.DismissEditDialog) },
+            onConfirm = { score ->
+                viewModel.onEvent(
+                    GradesEvent.EditGrade(
+                        studentId = editingStudent.id,
+                        activityName = GradeEditDraft.DEFAULT_ACTIVITY_NAME,
+                        activityType = GradeEditDraft.DEFAULT_ACTIVITY_TYPE,
+                        score = score,
+                        maxScore = editingStudent.maxScore.toDouble()
+                    )
+                )
+            }
+        )
     }
 
     Scaffold(
@@ -155,6 +188,12 @@ private fun GradesScreenContent(
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
+            if (uiState.isOffline) {
+                item {
+                    OfflineBanner()
+                }
+            }
+
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
@@ -236,8 +275,23 @@ private fun GradesScreenContent(
                     student = student,
                     onOpenDetail = { studentId ->
                         onOpenDetail(studentId, uiState.selectedSubject, uiState.selectedPeriod)
+                    },
+                    onEdit = { studentId ->
+                        viewModel.onEvent(GradesEvent.OpenEditDialog(studentId))
                     }
                 )
+            }
+
+            item {
+                Button(
+                    onClick = { viewModel.onEvent(GradesEvent.SaveGrades) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isSaving && !uiState.isLoading && uiState.hasUnsavedEdits
+                ) {
+                    Text(
+                        if (uiState.isSaving) "Guardando calificaciones…" else "Guardar calificaciones"
+                    )
+                }
             }
 
             item {
@@ -262,6 +316,15 @@ private fun GradesScreenContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                item {
+                    Button(
+                        onClick = { viewModel.onEvent(GradesEvent.ApplyOcrSuggestions) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !uiState.isProcessingOcr
+                    ) {
+                        Text("Aplicar sugerencias OCR")
+                    }
+                }
             }
 
             item {
@@ -269,7 +332,8 @@ private fun GradesScreenContent(
                     onClick = {
                         viewModel.onEvent(GradesEvent.SendBulletinClicked)
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isSending && !uiState.isSaving
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
@@ -293,6 +357,57 @@ private fun GradesScreenContent(
 
         }
     }
+}
+
+@Composable
+private fun GradeEditDialog(
+    studentName: String,
+    initialScore: String,
+    maxScore: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Double) -> Unit
+) {
+    var scoreText by remember(initialScore, studentName) { mutableStateOf(initialScore) }
+    var errorText by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Nota de $studentName") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = scoreText,
+                    onValueChange = {
+                        scoreText = it
+                        errorText = null
+                    },
+                    label = { Text("Nota (0–$maxScore)") },
+                    singleLine = true,
+                    isError = errorText != null,
+                    supportingText = errorText?.let { { Text(it) } }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val score = scoreText.replace(',', '.').toDoubleOrNull()
+                    when {
+                        score == null -> errorText = "Ingresa un número válido."
+                        score !in 0.0..maxScore.toDouble() -> errorText = "La nota debe estar entre 0 y $maxScore."
+                        else -> onConfirm(score)
+                    }
+                }
+            ) {
+                Text("Aceptar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
 }
 
 @Preview(showBackground = true)

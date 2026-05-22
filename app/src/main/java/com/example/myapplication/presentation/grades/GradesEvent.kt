@@ -16,6 +16,9 @@ sealed interface GradesEvent {
     data object RefreshAverages : GradesEvent
     data class OpenDetail(val studentId: Long) : GradesEvent
     data class OcrImageSelected(val uri: Uri) : GradesEvent
+    data object ApplyOcrSuggestions : GradesEvent
+    data class OpenEditDialog(val studentId: Long) : GradesEvent
+    data object DismissEditDialog : GradesEvent
     data object SaveGrades : GradesEvent
     data object SendBulletinClicked : GradesEvent
     data object ClearMessages : GradesEvent

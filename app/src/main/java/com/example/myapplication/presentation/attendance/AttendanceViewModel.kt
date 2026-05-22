@@ -4,11 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.net.Uri
 import com.example.myapplication.BuildConfig
+import com.example.myapplication.core.network.NetworkMonitor
 import com.example.myapplication.domain.model.Attendance
+import com.example.myapplication.domain.model.sync.SyncOutcome
+import com.example.myapplication.domain.repository.SyncRepository
 import com.example.myapplication.domain.model.AttendanceStatus
 import com.example.myapplication.domain.usecase.attendance.GetAttendanceByDateUseCase
 import com.example.myapplication.domain.usecase.ocr.RecognizeTextFromImageUseCase
 import com.example.myapplication.domain.usecase.attendance.SaveAttendanceUseCase
+import com.example.myapplication.domain.model.telegram.TelegramSendOutcome
 import com.example.myapplication.domain.usecase.telegram.SendTelegramMessageUseCase
 import com.example.myapplication.services.telegram.TelegramMessageBuilder
 import kotlinx.coroutines.delay
@@ -26,6 +30,8 @@ class AttendanceViewModel(
     private val saveAttendanceUseCase: SaveAttendanceUseCase,
     private val recognizeTextFromImageUseCase: RecognizeTextFromImageUseCase,
     private val sendTelegramMessageUseCase: SendTelegramMessageUseCase,
+    private val networkMonitor: NetworkMonitor? = null,
+    private val syncRepository: SyncRepository? = null,
     initialState: AttendanceUiState = AttendanceUiState(
         isLoading = true,
         selectedDate = currentDate(),
@@ -35,8 +41,16 @@ class AttendanceViewModel(
     private val _uiState = MutableStateFlow(initialState)
     val uiState: StateFlow<AttendanceUiState> = _uiState.asStateFlow()
     private var observeJob: Job? = null
+    private var hasPendingLocalEdits = false
 
     init {
+        networkMonitor?.let { monitor ->
+            viewModelScope.launch {
+                monitor.isOnline.collect { online ->
+                    _uiState.update { it.copy(isOffline = !online) }
+                }
+            }
+        }
         observeAttendanceForDate(_uiState.value.selectedDate)
     }
 
@@ -47,6 +61,7 @@ class AttendanceViewModel(
             is AttendanceEvent.MarkPresent -> updateStatus(event.studentId, AttendanceStatus.PRESENT)
             is AttendanceEvent.MarkLate -> updateStatus(event.studentId, AttendanceStatus.LATE)
             is AttendanceEvent.MarkAbsent -> updateStatus(event.studentId, AttendanceStatus.ABSENT)
+            is AttendanceEvent.MarkJustified -> updateStatus(event.studentId, AttendanceStatus.JUSTIFIED)
             AttendanceEvent.MarkAllPresent -> markAllPresent()
             AttendanceEvent.ClearMarks -> clearMarks()
             AttendanceEvent.SaveAttendance -> saveAttendance()
@@ -59,6 +74,7 @@ class AttendanceViewModel(
 
     private fun observeAttendanceForDate(date: String) {
         observeJob?.cancel()
+        hasPendingLocalEdits = false
         observeJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null) }
             getAttendanceByDateUseCase(date).collect { records ->
@@ -69,7 +85,7 @@ class AttendanceViewModel(
                         gradeSection = "${record.student.grade} ${record.student.section}"
                     )
                 }
-                val statusByStudent = records
+                val statusFromDb = records
                     .mapNotNull { record ->
                         record.attendance?.let { attendance ->
                             attendance.studentId to attendance.status
@@ -80,11 +96,16 @@ class AttendanceViewModel(
                     "${student.grade} Grado Sección ${student.section}"
                 } ?: "Curso no asignado"
                 _uiState.update { state ->
+                    val attendanceByStudent = if (hasPendingLocalEdits) {
+                        state.attendanceByStudent
+                    } else {
+                        statusFromDb
+                    }
                     state.copy(
                         selectedDate = date,
                         dateLabel = "Fecha: ${toHumanDate(date)}",
                         students = students,
-                        attendanceByStudent = statusByStudent,
+                        attendanceByStudent = attendanceByStudent,
                         courseName = courseName,
                         isLoading = false
                     ).recalculateSummary()
@@ -98,6 +119,7 @@ class AttendanceViewModel(
     }
 
     private fun updateStatus(studentId: Long, status: AttendanceStatus) {
+        hasPendingLocalEdits = true
         _uiState.update { state ->
             state.withSelectedStatus(studentId, status).copy(
                 errorMessage = null,
@@ -107,6 +129,7 @@ class AttendanceViewModel(
     }
 
     private fun markAllPresent() {
+        hasPendingLocalEdits = true
         _uiState.update { state ->
             val allPresent = state.students.associate { it.id to AttendanceStatus.PRESENT }
             state.copy(
@@ -118,6 +141,7 @@ class AttendanceViewModel(
     }
 
     private fun clearMarks() {
+        hasPendingLocalEdits = true
         _uiState.update { state ->
             state.copy(
                 attendanceByStudent = emptyMap(),
@@ -161,7 +185,20 @@ class AttendanceViewModel(
                     )
                 }
             }.onSuccess {
-                _uiState.update { it.copy(isSaving = false, successMessage = "Asistencia guardada correctamente.") }
+                hasPendingLocalEdits = false
+                val syncMessage = syncRepository?.syncPendingRecords()?.let { outcome ->
+                    when (outcome) {
+                        is SyncOutcome.Success -> " ${outcome.message}"
+                        is SyncOutcome.Skipped -> ""
+                        is SyncOutcome.Failure -> " (sync: ${outcome.message})"
+                    }
+                }.orEmpty()
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        successMessage = "Asistencia guardada correctamente.$syncMessage"
+                    )
+                }
             }.onFailure { throwable ->
                 _uiState.update {
                     it.copy(
@@ -226,18 +263,27 @@ class AttendanceViewModel(
                 }
             )
             val chatId = BuildConfig.TELEGRAM_DEFAULT_CHAT_ID
-            val sent = sendTelegramMessageUseCase(chatId, message)
-            _uiState.update {
-                currentState.copy(
-                    isSending = false,
-                    reportPreview = reportPreview,
-                    successMessage = if (sent) "Reporte enviado por Telegram."
-                    else "Reporte preparado, pero no se pudo enviar por Telegram."
-                ).copy(
-                    errorMessage = if (!sent) {
-                        "Verifica TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID en local.properties."
-                    } else null
-                )
+            when (val outcome = sendTelegramMessageUseCase(chatId, message)) {
+                is TelegramSendOutcome.Success -> {
+                    _uiState.update {
+                        currentState.copy(
+                            isSending = false,
+                            reportPreview = reportPreview,
+                            successMessage = "Reporte enviado por Telegram.",
+                            errorMessage = null
+                        )
+                    }
+                }
+                is TelegramSendOutcome.Failure -> {
+                    _uiState.update {
+                        currentState.copy(
+                            isSending = false,
+                            reportPreview = reportPreview,
+                            successMessage = null,
+                            errorMessage = outcome.message
+                        )
+                    }
+                }
             }
         }
     }
@@ -276,6 +322,7 @@ class AttendanceViewModel(
     }
 
     private fun applyOcrSuggestions() {
+        hasPendingLocalEdits = true
         val state = _uiState.value
         if (state.detectedOcrText.isBlank()) {
             _uiState.update { it.copy(errorMessage = "No hay texto OCR para procesar.") }

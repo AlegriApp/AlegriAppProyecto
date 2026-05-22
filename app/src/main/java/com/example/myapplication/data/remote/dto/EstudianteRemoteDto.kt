@@ -1,0 +1,27 @@
+package com.example.myapplication.data.remote.dto
+
+import com.google.gson.annotations.SerializedName
+
+/** Respuesta REST de la tabla `estudiantes` (PostgREST / Supabase). */
+data class EstudianteRemoteDto(
+    val id: Long,
+    @SerializedName("codigo_institucional") val codigoInstitucional: String? = null,
+    val nombre: String,
+    val apellido: String,
+    val estado: String? = null,
+    @SerializedName("estudiante_curso") val estudianteCurso: List<EstudianteCursoRemoteDto>? = null
+)
+
+data class EstudianteCursoRemoteDto(
+    val estado: String? = null,
+    val cursos: CursoRemoteDto? = null
+)
+
+data class CursoRemoteDto(
+    val paralelo: String? = null,
+    @SerializedName("niveles_academicos") val nivelAcademico: NivelAcademicoRemoteDto? = null
+)
+
+data class NivelAcademicoRemoteDto(
+    val nombre: String? = null
+)

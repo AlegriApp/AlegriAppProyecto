@@ -5,6 +5,7 @@ import com.example.myapplication.data.local.dao.StudentDao
 import com.example.myapplication.data.mapper.toDomain
 import com.example.myapplication.data.mapper.toEntity
 import com.example.myapplication.domain.model.Attendance
+import com.example.myapplication.domain.model.AttendanceStatus
 import com.example.myapplication.domain.model.StudentAttendanceRecord
 import com.example.myapplication.domain.repository.AttendanceRepository
 import kotlinx.coroutines.flow.Flow
@@ -30,6 +31,12 @@ class AttendanceRepositoryImpl(
         }
 
     override suspend fun upsertAttendance(attendance: Attendance) {
-        attendanceDao.insertOrReplaceAttendance(attendance.toEntity())
+        require(attendance.status != AttendanceStatus.UNMARKED) {
+            "No se puede persistir asistencia sin marcar"
+        }
+        val existing = attendanceDao.getByStudentAndDate(attendance.studentId, attendance.date)
+        attendanceDao.insertOrReplaceAttendance(
+            attendance.toEntity(existingId = existing?.id)
+        )
     }
 }

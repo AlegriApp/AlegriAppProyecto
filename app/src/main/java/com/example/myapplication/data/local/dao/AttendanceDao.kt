@@ -13,6 +13,11 @@ interface AttendanceDao {
     @Query("SELECT * FROM asistencias WHERE fecha = :date ORDER BY estudiante_id ASC")
     fun observeAttendanceByDate(date: String): Flow<List<AttendanceEntity>>
 
+    @Query(
+        "SELECT * FROM asistencias WHERE estudiante_id = :studentId AND fecha = :date LIMIT 1"
+    )
+    suspend fun getByStudentAndDate(studentId: Long, date: String): AttendanceEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrReplaceAttendance(attendance: AttendanceEntity)
 
