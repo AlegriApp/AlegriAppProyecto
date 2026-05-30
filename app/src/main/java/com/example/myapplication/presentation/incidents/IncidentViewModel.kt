@@ -96,6 +96,10 @@ class IncidentViewModel(
                         detectedOcrText = _uiState.value.detectedOcrText,
                         ocrSuggestedStudentName = _uiState.value.ocrSuggestedStudentName,
                         ocrMatchMessage = _uiState.value.ocrMatchMessage,
+                        hasManualStudentInputSinceLastOcr = _uiState.value.hasManualStudentInputSinceLastOcr,
+                        hasManualTypeSelectionSinceLastOcr = _uiState.value.hasManualTypeSelectionSinceLastOcr,
+                        hasManualSeveritySelectionSinceLastOcr = _uiState.value.hasManualSeveritySelectionSinceLastOcr,
+                        hasManualDescriptionEditSinceLastOcr = _uiState.value.hasManualDescriptionEditSinceLastOcr,
                         showManualStudentForm = _uiState.value.showManualStudentForm,
                         manualStudentDraft = _uiState.value.manualStudentDraft,
                         sendStatus = _uiState.value.sendStatus,
@@ -128,6 +132,7 @@ class IncidentViewModel(
             it.copy(
                 selectedStudentId = studentId,
                 showManualStudentForm = false,
+                hasManualStudentInputSinceLastOcr = true,
                 lastSavedIncidentId = null,
                 sendStatus = IncidentSendStatus.Idle,
                 studentError = null,
@@ -142,6 +147,7 @@ class IncidentViewModel(
         _uiState.update {
             it.copy(
                 selectedType = type,
+                hasManualTypeSelectionSinceLastOcr = true,
                 lastSavedIncidentId = null,
                 sendStatus = IncidentSendStatus.Idle,
                 typeError = null,
@@ -155,6 +161,7 @@ class IncidentViewModel(
         _uiState.update {
             it.copy(
                 selectedSeverity = severity,
+                hasManualSeveritySelectionSinceLastOcr = true,
                 lastSavedIncidentId = null,
                 sendStatus = IncidentSendStatus.Idle,
                 errorMessage = null,
@@ -167,6 +174,7 @@ class IncidentViewModel(
         _uiState.update {
             it.copy(
                 description = description,
+                hasManualDescriptionEditSinceLastOcr = true,
                 lastSavedIncidentId = null,
                 sendStatus = IncidentSendStatus.Idle,
                 descriptionError = null,
@@ -306,6 +314,10 @@ class IncidentViewModel(
                 detectedOcrText = "",
                 ocrSuggestedStudentName = null,
                 ocrMatchMessage = null,
+                hasManualStudentInputSinceLastOcr = false,
+                hasManualTypeSelectionSinceLastOcr = false,
+                hasManualSeveritySelectionSinceLastOcr = false,
+                hasManualDescriptionEditSinceLastOcr = false,
                 showManualStudentForm = false,
                 manualStudentDraft = ManualStudentDraft(),
                 sendStatus = IncidentSendStatus.Idle,
@@ -378,13 +390,10 @@ class IncidentViewModel(
             }
             val result = recognizeTextFromImageUseCase(uri)
             result.onSuccess { ocr ->
-                _uiState.update {
-                    it.copy(
-                        isProcessingOcr = false,
-                        detectedOcrText = ocr.rawText,
-                        successMessage = "Texto detectado. Revisa y aplica la sugerencia OCR."
-                    )
-                }
+                applyOcrAnalysis(
+                    rawText = ocr.rawText,
+                    isNewOcrRun = true
+                )
             }.onFailure { throwable ->
                 _uiState.update {
                     it.copy(
@@ -402,39 +411,7 @@ class IncidentViewModel(
             _uiState.update { it.copy(errorMessage = "No hay texto OCR para procesar.") }
             return
         }
-
-        val lines = state.detectedOcrText
-            .lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .toList()
-
-        val studentMatch = findBestStudentMatch(lines, state.students)
-        val suggestedName = studentMatch?.student?.fullName ?: extractLikelyStudentName(lines)
-
-        _uiState.update {
-            it.copy(
-                selectedStudentId = studentMatch?.student?.id,
-                showManualStudentForm = studentMatch == null,
-                manualStudentDraft = if (studentMatch == null) {
-                    it.manualStudentDraft.copy(
-                        fullName = suggestedName ?: it.manualStudentDraft.fullName
-                    )
-                } else {
-                    it.manualStudentDraft
-                },
-                description = if (it.description.isBlank()) state.detectedOcrText.trim() else it.description,
-                ocrSuggestedStudentName = suggestedName,
-                ocrMatchMessage = studentMatch?.let { match ->
-                    "Estudiante detectado en base: ${match.student.fullName}."
-                } ?: suggestedName?.let { name ->
-                    "No se encontro \"$name\" en la base. Puedes registrarlo manualmente."
-                } ?: "No se pudo identificar el estudiante en el texto OCR.",
-                studentError = null,
-                manualStudentError = null,
-                successMessage = "Sugerencia OCR aplicada. Verifica antes de guardar."
-            )
-        }
+        applyOcrAnalysis(rawText = state.detectedOcrText, isNewOcrRun = false)
     }
 
     private fun toggleManualStudentForm(enabled: Boolean) {
@@ -442,6 +419,7 @@ class IncidentViewModel(
             it.copy(
                 showManualStudentForm = enabled,
                 selectedStudentId = if (enabled) null else it.selectedStudentId,
+                hasManualStudentInputSinceLastOcr = true,
                 studentError = null,
                 manualStudentError = null,
                 errorMessage = null,
@@ -454,6 +432,7 @@ class IncidentViewModel(
         _uiState.update {
             it.copy(
                 manualStudentDraft = it.manualStudentDraft.update(),
+                hasManualStudentInputSinceLastOcr = true,
                 studentError = null,
                 manualStudentError = null,
                 errorMessage = null,
@@ -500,24 +479,133 @@ class IncidentViewModel(
             }
         }
 
-    private fun findBestStudentMatch(lines: List<String>, students: List<Student>): StudentLineMatch? {
-        return students.mapNotNull { student ->
-            val normalizedStudent = normalizeText(student.fullName)
-            val studentTokens = normalizedStudent.split(" ").filter { token -> token.length > 2 }.toSet()
-            val bestLine = lines.map { line ->
-                val normalizedLine = normalizeText(line)
-                val exact = normalizedLine.contains(normalizedStudent)
-                val matchedTokens = studentTokens.count { token -> normalizedLine.contains(token) }
-                val score = when {
-                    exact -> 1.0
-                    studentTokens.isEmpty() -> 0.0
-                    else -> matchedTokens.toDouble() / studentTokens.size.toDouble()
-                }
-                line to score
-            }.maxByOrNull { it.second } ?: return@mapNotNull null
+    private fun applyOcrAnalysis(rawText: String, isNewOcrRun: Boolean) {
+        val state = _uiState.value
+        val analysis = analyzeIncidentOcrText(rawText = rawText, students = state.students)
 
-            if (bestLine.second >= MIN_STUDENT_MATCH_SCORE) {
-                StudentLineMatch(student = student, line = bestLine.first, score = bestLine.second)
+        _uiState.update { current ->
+            val shouldUpdateStudent = isNewOcrRun || !current.hasManualStudentInputSinceLastOcr
+            val shouldUpdateType = isNewOcrRun || !current.hasManualTypeSelectionSinceLastOcr
+            val shouldUpdateSeverity = isNewOcrRun || !current.hasManualSeveritySelectionSinceLastOcr
+            val shouldUpdateDescription = isNewOcrRun || !current.hasManualDescriptionEditSinceLastOcr
+
+            val manualStudentDraft = if (shouldUpdateStudent && analysis.detectedStudent == null && !analysis.suggestedStudentName.isNullOrBlank()) {
+                current.manualStudentDraft.copy(fullName = analysis.suggestedStudentName)
+            } else {
+                current.manualStudentDraft
+            }
+
+            current.copy(
+                isProcessingOcr = false,
+                detectedOcrText = rawText,
+                selectedStudentId = if (shouldUpdateStudent) analysis.detectedStudent?.id else current.selectedStudentId,
+                showManualStudentForm = if (shouldUpdateStudent) {
+                    analysis.detectedStudent == null && !analysis.suggestedStudentName.isNullOrBlank()
+                } else {
+                    current.showManualStudentForm
+                },
+                manualStudentDraft = manualStudentDraft,
+                selectedType = if (shouldUpdateType) {
+                    analysis.detectedType ?: current.selectedType ?: IncidentType.OTHER
+                } else {
+                    current.selectedType
+                },
+                selectedSeverity = if (shouldUpdateSeverity) {
+                    analysis.detectedSeverity ?: current.selectedSeverity
+                } else {
+                    current.selectedSeverity
+                },
+                description = if (shouldUpdateDescription) analysis.suggestedDescription else current.description,
+                ocrSuggestedStudentName = analysis.suggestedStudentName,
+                ocrMatchMessage = buildOcrMatchMessage(analysis),
+                hasManualStudentInputSinceLastOcr = if (isNewOcrRun) false else current.hasManualStudentInputSinceLastOcr,
+                hasManualTypeSelectionSinceLastOcr = if (isNewOcrRun) false else current.hasManualTypeSelectionSinceLastOcr,
+                hasManualSeveritySelectionSinceLastOcr = if (isNewOcrRun) false else current.hasManualSeveritySelectionSinceLastOcr,
+                hasManualDescriptionEditSinceLastOcr = if (isNewOcrRun) false else current.hasManualDescriptionEditSinceLastOcr,
+                studentError = null,
+                manualStudentError = null,
+                typeError = null,
+                descriptionError = null,
+                errorMessage = null,
+                successMessage = if (analysis.detectedStudent != null) {
+                    "OCR procesado. Campos sugeridos aplicados."
+                } else {
+                    "OCR procesado. Revisa la sugerencia del estudiante antes de guardar."
+                }
+            )
+        }
+    }
+
+    private fun analyzeIncidentOcrText(
+        rawText: String,
+        students: List<Student>
+    ): IncidentOcrAnalysisResult {
+        val lines = rawText
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toList()
+        val clauses = splitIntoClauses(rawText)
+        val studentHint = extractFieldValue(lines, "estudiante", "alumno", "nombre")
+        val studentMatch = findBestStudentMatch(
+            lines = lines,
+            clauses = clauses,
+            studentHint = studentHint,
+            students = students
+        )
+        val suggestedDescription = extractDescription(rawText, lines)
+        return IncidentOcrAnalysisResult(
+            detectedStudent = studentMatch?.student,
+            suggestedStudentName = studentMatch?.student?.fullName ?: studentHint ?: extractLikelyStudentName(lines),
+            detectedType = detectIncidentType(rawText, lines),
+            detectedSeverity = detectSeverity(rawText, lines),
+            suggestedDescription = suggestedDescription,
+            confidence = studentMatch?.score
+        )
+    }
+
+    private fun findBestStudentMatch(
+        lines: List<String>,
+        clauses: List<String>,
+        studentHint: String?,
+        students: List<Student>
+    ): StudentLineMatch? {
+        val sources = buildList {
+            studentHint?.takeIf { it.isNotBlank() }?.let(::add)
+            addAll(lines)
+            addAll(clauses)
+        }.distinct()
+
+        return students.mapNotNull { student ->
+            val normalizedFullName = normalizeText(student.fullName)
+            val aliases = student.aliases.map(::normalizeText).filter { it.isNotBlank() }
+            val orderedNameTokens = tokensFromText(normalizedFullName)
+            val nameTokens = orderedNameTokens.toSet()
+
+            val bestSource = sources.maxOfOrNull { source ->
+                val normalizedSource = normalizeText(source)
+                when {
+                    normalizedSource.contains(normalizedFullName) -> 1.0
+                    aliases.any { alias -> normalizedSource.contains(alias) } -> 0.95
+                    nameTokens.size < 2 -> 0.0
+                    else -> {
+                        val sourceTokens = tokensFromText(normalizedSource).toSet()
+                        if (sourceTokens.isEmpty()) {
+                            0.0
+                        } else {
+                            val matched = nameTokens.intersect(sourceTokens).size
+                            val dice = (2.0 * matched) / (nameTokens.size + sourceTokens.size).toDouble()
+                            val containsFirstName = orderedNameTokens.firstOrNull()?.let(sourceTokens::contains) == true
+                            val containsLastName = orderedNameTokens.lastOrNull()?.let(sourceTokens::contains) == true
+                            val bonus = if (containsFirstName && containsLastName) 0.15 else 0.0
+                            (dice + bonus).coerceAtMost(0.93)
+                        }
+                    }
+                }
+            } ?: 0.0
+
+            if (bestSource >= MIN_STUDENT_MATCH_SCORE) {
+                StudentLineMatch(student = student, score = bestSource)
             } else {
                 null
             }
@@ -525,12 +613,153 @@ class IncidentViewModel(
     }
 
     private fun extractLikelyStudentName(lines: List<String>): String? =
-        lines
-            .map { it.trim() }
-            .firstOrNull { line ->
-                val words = normalizeText(line).split(" ").filter { token -> token.length > 1 }
+        extractFieldValue(lines, "estudiante", "alumno", "nombre")
+            ?: lines.firstOrNull { line ->
+                val words = tokensFromText(line)
                 words.size in 2..5 && line.any(Char::isLetter)
             }
+
+    private fun detectIncidentType(rawText: String, lines: List<String>): IncidentType {
+        val explicitType = extractFieldValue(lines, "tipo")
+        mapIncidentType(explicitType)?.let { return it }
+
+        val normalizedText = normalizeText(rawText)
+        val scores = mapOf(
+            IncidentType.BEHAVIOR to countKeywordMatches(
+                normalizedText,
+                "conducta",
+                "comportamiento",
+                "indisciplina",
+                "pelea",
+                "respeto"
+            ),
+            IncidentType.ACADEMIC to countKeywordMatches(
+                normalizedText,
+                "nota",
+                "rendimiento",
+                "tarea",
+                "deber",
+                "evaluacion",
+                "academico"
+            ),
+            IncidentType.HEALTH to countKeywordMatches(
+                normalizedText,
+                "dolor",
+                "enfermo",
+                "salud",
+                "accidente",
+                "malestar"
+            )
+        )
+
+        return scores.maxByOrNull { it.value }
+            ?.takeIf { it.value > 0 }
+            ?.key
+            ?: IncidentType.OTHER
+    }
+
+    private fun detectSeverity(rawText: String, lines: List<String>): IncidentSeverity? {
+        val explicitSeverity = extractFieldValue(lines, "severidad", "gravedad", "nivel")
+        mapSeverity(explicitSeverity)?.let { return it }
+
+        val normalizedText = normalizeText(rawText)
+        return when {
+            containsKeyword(normalizedText, "alta", "grave", "urgente", "critica", "critico") -> IncidentSeverity.HIGH
+            containsKeyword(normalizedText, "media", "moderada") -> IncidentSeverity.MEDIUM
+            containsKeyword(normalizedText, "baja", "leve") -> IncidentSeverity.LOW
+            else -> null
+        }
+    }
+
+    private fun extractDescription(rawText: String, lines: List<String>): String {
+        val descriptionIndex = lines.indexOfFirst { line ->
+            val normalizedLine = normalizeText(line)
+            containsKeyword(normalizedLine, "descripcion", "detalle")
+        }
+        if (descriptionIndex == -1) return rawText.trim()
+
+        val descriptionLines = mutableListOf<String>()
+        val firstLine = lines[descriptionIndex]
+        val remainder = firstLine.substringAfter(':', "").substringAfter('-', "").trim()
+        if (remainder.isNotBlank()) {
+            descriptionLines += remainder
+        }
+        lines.drop(descriptionIndex + 1)
+            .takeWhile { line -> !isStructuredFieldLine(line) }
+            .forEach(descriptionLines::add)
+
+        return descriptionLines.joinToString(" ").ifBlank { rawText.trim() }
+    }
+
+    private fun extractFieldValue(lines: List<String>, vararg labels: String): String? {
+        val normalizedLabels = labels.map(::normalizeText)
+        return lines.firstNotNullOfOrNull { line ->
+            val normalizedLine = normalizeText(line)
+            val label = normalizedLabels.firstOrNull { current ->
+                normalizedLine.startsWith("$current ") || normalizedLine.startsWith("$current:")
+            } ?: return@firstNotNullOfOrNull null
+
+            line.substringAfter(':', "")
+                .ifBlank { line.substringAfter(' ', "") }
+                .trim()
+                .ifBlank { null }
+        }
+    }
+
+    private fun mapIncidentType(value: String?): IncidentType? {
+        val normalized = value?.let(::normalizeText).orEmpty()
+        return when {
+            containsKeyword(normalized, "conducta", "comportamiento", "indisciplina", "pelea", "respeto") -> IncidentType.BEHAVIOR
+            containsKeyword(normalized, "academico", "nota", "rendimiento", "tarea", "deber", "evaluacion") -> IncidentType.ACADEMIC
+            containsKeyword(normalized, "salud", "dolor", "enfermo", "accidente", "malestar") -> IncidentType.HEALTH
+            normalized.isNotBlank() -> IncidentType.OTHER
+            else -> null
+        }
+    }
+
+    private fun mapSeverity(value: String?): IncidentSeverity? {
+        val normalized = value?.let(::normalizeText).orEmpty()
+        return when {
+            containsKeyword(normalized, "alta", "grave", "urgente", "critica", "critico") -> IncidentSeverity.HIGH
+            containsKeyword(normalized, "media", "moderada") -> IncidentSeverity.MEDIUM
+            containsKeyword(normalized, "baja", "leve") -> IncidentSeverity.LOW
+            else -> null
+        }
+    }
+
+    private fun buildOcrMatchMessage(analysis: IncidentOcrAnalysisResult): String =
+        analysis.detectedStudent?.let { student ->
+            val percentage = ((analysis.confidence ?: 0.0) * 100).toInt()
+            "Estudiante detectado: ${student.fullName} (${percentage}% de coincidencia)."
+        } ?: analysis.suggestedStudentName?.let { name ->
+            "No se pudo identificar automaticamente al estudiante. Sugerencia OCR: $name."
+        } ?: "No se pudo identificar automaticamente al estudiante."
+
+    private fun splitIntoClauses(text: String): List<String> =
+        text
+            .split('\n', ',', ';', '.')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+    private fun tokensFromText(value: String): List<String> =
+        normalizeText(value)
+            .split(" ")
+            .filter { token -> token.length >= MIN_TOKEN_LENGTH }
+
+    private fun countKeywordMatches(text: String, vararg keywords: String): Int =
+        keywords.count { keyword -> containsWordSequence(text, normalizeText(keyword)) }
+
+    private fun containsKeyword(text: String, vararg keywords: String): Boolean =
+        keywords.any { keyword -> containsWordSequence(text, normalizeText(keyword)) }
+
+    private fun containsWordSequence(text: String, candidate: String): Boolean =
+        Regex("(^|\\s)${Regex.escape(candidate)}($|\\s)").containsMatchIn(text)
+
+    private fun isStructuredFieldLine(line: String): Boolean {
+        val normalizedLine = normalizeText(line)
+        return listOf("estudiante", "alumno", "nombre", "tipo", "severidad", "gravedad", "nivel")
+            .any { label -> normalizedLine.startsWith("$label ") || normalizedLine.startsWith("$label:") }
+    }
 
     private fun normalizeText(value: String): String =
         Normalizer.normalize(value.lowercase(), Normalizer.Form.NFD)
@@ -545,12 +774,21 @@ class IncidentViewModel(
     companion object {
         private const val MIN_DESCRIPTION_LENGTH = 10
         private const val MIN_STUDENT_NAME_LENGTH = 5
-        private const val MIN_STUDENT_MATCH_SCORE = 0.6
+        private const val MIN_STUDENT_MATCH_SCORE = 0.78
+        private const val MIN_TOKEN_LENGTH = 3
     }
 }
 
 private data class StudentLineMatch(
     val student: Student,
-    val line: String,
     val score: Double
+)
+
+private data class IncidentOcrAnalysisResult(
+    val detectedStudent: Student?,
+    val suggestedStudentName: String?,
+    val detectedType: IncidentType?,
+    val detectedSeverity: IncidentSeverity?,
+    val suggestedDescription: String,
+    val confidence: Double?
 )
