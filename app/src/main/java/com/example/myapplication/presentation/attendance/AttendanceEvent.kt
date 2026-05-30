@@ -15,6 +15,7 @@ sealed interface AttendanceEvent {
     data object SaveAttendance : AttendanceEvent
     data object SendReport : AttendanceEvent
     data class OcrImageSelected(val uri: Uri) : AttendanceEvent
+    data class TranscriptionTextChanged(val text: String) : AttendanceEvent
     data object ApplyOcrSuggestions : AttendanceEvent
     data object ClearMessages : AttendanceEvent
 }
