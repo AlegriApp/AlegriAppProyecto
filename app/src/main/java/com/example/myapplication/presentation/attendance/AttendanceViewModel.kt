@@ -9,6 +9,8 @@ import com.example.myapplication.domain.model.Attendance
 import com.example.myapplication.domain.model.sync.SyncOutcome
 import com.example.myapplication.domain.repository.SyncRepository
 import com.example.myapplication.domain.model.AttendanceStatus
+import com.example.myapplication.domain.service.AttendanceTranscriptionService
+import com.example.myapplication.domain.service.AttendanceTranscriptionStudent
 import com.example.myapplication.domain.usecase.attendance.GetAttendanceByDateUseCase
 import com.example.myapplication.domain.usecase.ocr.RecognizeTextFromImageUseCase
 import com.example.myapplication.domain.usecase.attendance.SaveAttendanceUseCase
@@ -29,6 +31,7 @@ class AttendanceViewModel(
     private val getAttendanceByDateUseCase: GetAttendanceByDateUseCase,
     private val saveAttendanceUseCase: SaveAttendanceUseCase,
     private val recognizeTextFromImageUseCase: RecognizeTextFromImageUseCase,
+    private val attendanceTranscriptionService: AttendanceTranscriptionService = AttendanceTranscriptionService(),
     private val sendTelegramMessageUseCase: SendTelegramMessageUseCase,
     private val networkMonitor: NetworkMonitor? = null,
     private val syncRepository: SyncRepository? = null,
@@ -67,6 +70,7 @@ class AttendanceViewModel(
             AttendanceEvent.SaveAttendance -> saveAttendance()
             AttendanceEvent.SendReport -> sendReport()
             is AttendanceEvent.OcrImageSelected -> processOcr(event.uri)
+            is AttendanceEvent.TranscriptionTextChanged -> updateTranscriptionText(event.text)
             AttendanceEvent.ApplyOcrSuggestions -> applyOcrSuggestions()
             AttendanceEvent.ClearMessages -> clearMessages()
         }
@@ -82,7 +86,8 @@ class AttendanceViewModel(
                     AttendanceStudentUi(
                         id = record.student.id,
                         name = record.student.fullName,
-                        gradeSection = "${record.student.grade} ${record.student.section}"
+                        gradeSection = "${record.student.grade} ${record.student.section}",
+                        aliases = record.student.aliases
                     )
                 }
                 val statusFromDb = records
@@ -292,6 +297,16 @@ class AttendanceViewModel(
         _uiState.update { it.copy(errorMessage = null, successMessage = null) }
     }
 
+    private fun updateTranscriptionText(text: String) {
+        _uiState.update {
+            it.copy(
+                detectedOcrText = text,
+                errorMessage = null,
+                successMessage = null
+            )
+        }
+    }
+
     private fun processOcr(uri: Uri) {
         viewModelScope.launch {
             _uiState.update {
@@ -322,40 +337,36 @@ class AttendanceViewModel(
     }
 
     private fun applyOcrSuggestions() {
-        hasPendingLocalEdits = true
         val state = _uiState.value
         if (state.detectedOcrText.isBlank()) {
             _uiState.update { it.copy(errorMessage = "No hay texto OCR para procesar.") }
             return
         }
-        val lines = state.detectedOcrText
-            .lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .toList()
-        val updates = state.students.associate { student ->
-            student.id to inferStatusFromOcr(student.name, lines)
+        val matches = attendanceTranscriptionService.process(
+            transcribedText = state.detectedOcrText,
+            students = state.students.map { student ->
+                AttendanceTranscriptionStudent(
+                    id = student.id,
+                    fullName = student.name,
+                    aliases = student.aliases
+                )
+            }
+        )
+        if (matches.isEmpty()) {
+            _uiState.update {
+                it.copy(errorMessage = "No se encontraron coincidencias de asistencia en el texto.")
+            }
+            return
         }
+        hasPendingLocalEdits = true
+        val detectedStatuses = matches.associate { match -> match.studentId to match.status }
         _uiState.update {
+            val updatedStatuses = it.attendanceByStudent + detectedStatuses
             it.copy(
-                attendanceByStudent = updates,
-                successMessage = "Sugerencias OCR aplicadas. Verifica antes de guardar."
+                attendanceByStudent = updatedStatuses,
+                errorMessage = null,
+                successMessage = "Se aplicaron ${matches.size} coincidencias. Verifica antes de guardar."
             ).recalculateSummary()
-        }
-    }
-
-    private fun inferStatusFromOcr(studentName: String, lines: List<String>): AttendanceStatus {
-        val studentKey = studentName.lowercase()
-        val studentLine = lines.firstOrNull { line ->
-            line.lowercase().contains(studentKey)
-        } ?: return AttendanceStatus.UNMARKED
-        val normalized = studentLine.lowercase()
-        return when {
-            normalized.contains("presente") -> AttendanceStatus.PRESENT
-            normalized.contains("atrasado") || normalized.contains("tarde") -> AttendanceStatus.LATE
-            normalized.contains("justificado") -> AttendanceStatus.JUSTIFIED
-            normalized.contains("ausente") || normalized.contains("falta") -> AttendanceStatus.ABSENT
-            else -> AttendanceStatus.UNMARKED
         }
     }
 

@@ -23,6 +23,7 @@ import com.example.myapplication.domain.repository.IncidentRepository
 import com.example.myapplication.domain.repository.OcrRepository
 import com.example.myapplication.domain.repository.StudentRepository
 import com.example.myapplication.domain.repository.TelegramRepository
+import com.example.myapplication.domain.service.AttendanceTranscriptionService
 import com.example.myapplication.domain.usecase.attendance.GetAttendanceByDateUseCase
 import com.example.myapplication.domain.usecase.attendance.SaveAttendanceUseCase
 import com.example.myapplication.domain.usecase.grade.GetGradesBySubjectAndPeriodUseCase
@@ -142,6 +143,9 @@ object AppModule {
 
     fun provideRecognizeTextFromImageUseCase(context: Context): RecognizeTextFromImageUseCase =
         RecognizeTextFromImageUseCase(provideOcrRepository(context))
+
+    fun provideAttendanceTranscriptionService(): AttendanceTranscriptionService =
+        AttendanceTranscriptionService()
 
     fun provideTelegramApiService(): TelegramApiService {
         val botToken = BuildConfig.TELEGRAM_BOT_TOKEN

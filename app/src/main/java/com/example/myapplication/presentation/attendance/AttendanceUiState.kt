@@ -127,7 +127,8 @@ data class AttendanceUiState(
 data class AttendanceStudentUi(
     val id: Long,
     val name: String,
-    val gradeSection: String
+    val gradeSection: String,
+    val aliases: List<String> = emptyList()
 )
 
 data class AttendanceSummary(

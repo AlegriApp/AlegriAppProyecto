@@ -6,5 +6,6 @@ data class Student(
     val grade: String,
     val section: String,
     val representativeName: String,
-    val telegramChatId: String? = null
+    val telegramChatId: String? = null,
+    val aliases: List<String> = emptyList()
 )

@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -52,6 +53,7 @@ fun AttendanceScreenRoute(
             getAttendanceByDateUseCase = AppModule.provideGetAttendanceByDateUseCase(context),
             saveAttendanceUseCase = AppModule.provideSaveAttendanceUseCase(context),
             recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context),
+            attendanceTranscriptionService = AppModule.provideAttendanceTranscriptionService(),
             sendTelegramMessageUseCase = AppModule.provideSendTelegramMessageUseCase(),
             networkMonitor = AppModule.provideNetworkMonitor(context),
             syncRepository = AppModule.provideSyncRepository(context)
@@ -179,26 +181,45 @@ fun AttendanceScreen(
 
                 if (uiState.detectedOcrText.isNotBlank()) {
                     item {
+                        OutlinedTextField(
+                            value = uiState.detectedOcrText,
+                            onValueChange = {
+                                viewModel.onEvent(AttendanceEvent.TranscriptionTextChanged(it))
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .widthIn(max = contentMaxWidth),
+                            label = { Text("Texto transcrito") },
+                            minLines = 3
+                        )
+                    }
+                }
+
+                if (uiState.detectedOcrText.isNotBlank()) {
+                    item {
                         Button(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .widthIn(max = contentMaxWidth),
                             onClick = { viewModel.onEvent(AttendanceEvent.ApplyOcrSuggestions) }
                         ) {
-                            Text("Aplicar sugerencias OCR")
+                            Text("Aplicar transcripcion a la lista")
                         }
                     }
                 }
 
-                if (uiState.detectedOcrText.isNotBlank()) {
+                if (uiState.detectedOcrText.isBlank()) {
                     item {
-                        Text(
-                            text = uiState.detectedOcrText,
+                        OutlinedTextField(
+                            value = uiState.detectedOcrText,
+                            onValueChange = {
+                                viewModel.onEvent(AttendanceEvent.TranscriptionTextChanged(it))
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .widthIn(max = contentMaxWidth),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            label = { Text("Pegar texto transcrito") },
+                            minLines = 2
                         )
                     }
                 }
