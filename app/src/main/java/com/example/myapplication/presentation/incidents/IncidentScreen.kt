@@ -1,5 +1,7 @@
 package com.example.myapplication.presentation.incidents
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -44,6 +47,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -91,7 +95,9 @@ fun IncidentScreenRoute(
             getStudentsUseCase = AppModule.provideGetStudentsUseCase(context),
             saveIncidentUseCase = AppModule.provideSaveIncidentUseCase(context),
             sendIncidentReportUseCase = AppModule.provideSendIncidentReportUseCase(context),
-            incidentRepository = AppModule.provideIncidentRepository(context)
+            incidentRepository = AppModule.provideIncidentRepository(context),
+            studentRepository = AppModule.provideStudentRepository(context),
+            recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context)
         )
     }
     IncidentScreenContent(
@@ -110,6 +116,13 @@ private fun IncidentScreenContent(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var isStudentMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    val pickImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            onEvent(IncidentEvent.OcrImageSelected(uri))
+        }
+    }
 
     LaunchedEffect(uiState.errorMessage, uiState.successMessage) {
         uiState.errorMessage?.let { snackbarHostState.showSnackbar(it) }
@@ -181,14 +194,15 @@ private fun IncidentScreenContent(
 
                         if (uiState.students.isEmpty() && !uiState.isLoadingStudents) {
                             EmptyStudentsMessage(onRetry = { onEvent(IncidentEvent.LoadStudents) })
-                        } else {
-                            IncidentFormCard(
-                                uiState = uiState,
-                                isStudentMenuExpanded = isStudentMenuExpanded,
-                                onStudentMenuExpandedChange = { isStudentMenuExpanded = it },
-                                onEvent = onEvent
-                            )
                         }
+
+                        IncidentFormCard(
+                            uiState = uiState,
+                            isStudentMenuExpanded = isStudentMenuExpanded,
+                            onStudentMenuExpandedChange = { isStudentMenuExpanded = it },
+                            onPickOcrImage = { pickImageLauncher.launch("image/*") },
+                            onEvent = onEvent
+                        )
 
                         IncidentActionButtons(uiState = uiState, onEvent = onEvent)
                     }
@@ -289,6 +303,7 @@ private fun IncidentFormCard(
     uiState: IncidentUiState,
     isStudentMenuExpanded: Boolean,
     onStudentMenuExpandedChange: (Boolean) -> Unit,
+    onPickOcrImage: () -> Unit,
     onEvent: (IncidentEvent) -> Unit
 ) {
     val colors = rememberIncidentColors()
@@ -306,8 +321,9 @@ private fun IncidentFormCard(
         ) {
             IncidentFormSectionTitle("Estudiante involucrado")
             IncidentDropdownField(
-                value = selectedStudent?.fullName ?: "Seleccionar estudiante...",
-                isPlaceholder = selectedStudent == null,
+                value = selectedStudent?.fullName
+                    ?: uiState.manualStudentDraft.fullName.ifBlank { "Seleccionar estudiante..." },
+                isPlaceholder = selectedStudent == null && uiState.manualStudentDraft.fullName.isBlank(),
                 expanded = isStudentMenuExpanded,
                 onClick = { onStudentMenuExpandedChange(!isStudentMenuExpanded) }
             )
@@ -336,6 +352,104 @@ private fun IncidentFormCard(
                         }
                     }
                 }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = onPickOcrImage,
+                    enabled = !uiState.isProcessingOcr,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(imageVector = Icons.Filled.ImageSearch, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Leer foto")
+                }
+                TextButton(
+                    onClick = {
+                        onEvent(IncidentEvent.ToggleManualStudentForm(!uiState.showManualStudentForm))
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(if (uiState.showManualStudentForm) "Usar lista" else "Agregar manual")
+                }
+            }
+
+            if (uiState.isProcessingOcr) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
+            uiState.ocrMatchMessage?.let { message ->
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = colors.infoContainer
+                ) {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                    )
+                }
+            }
+
+            if (uiState.detectedOcrText.isNotBlank()) {
+                OutlinedButton(
+                    onClick = { onEvent(IncidentEvent.ApplyOcrSuggestions) },
+                    enabled = !uiState.isProcessingOcr,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Aplicar sugerencia OCR")
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = colors.infoContainer
+                ) {
+                    Text(
+                        text = uiState.detectedOcrText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
+            if (uiState.showManualStudentForm) {
+                IncidentFormSectionTitle("Registro manual del estudiante")
+                OutlinedTextField(
+                    value = uiState.manualStudentDraft.fullName,
+                    onValueChange = { onEvent(IncidentEvent.ManualStudentNameChanged(it)) },
+                    label = { Text("Nombre completo") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    isError = uiState.manualStudentError != null
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = uiState.manualStudentDraft.grade,
+                        onValueChange = { onEvent(IncidentEvent.ManualStudentGradeChanged(it)) },
+                        label = { Text("Grado") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = uiState.manualStudentDraft.section,
+                        onValueChange = { onEvent(IncidentEvent.ManualStudentSectionChanged(it)) },
+                        label = { Text("Seccion") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+                OutlinedTextField(
+                    value = uiState.manualStudentDraft.representativeName,
+                    onValueChange = { onEvent(IncidentEvent.ManualRepresentativeChanged(it)) },
+                    label = { Text("Representante") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                uiState.manualStudentError?.let { ErrorText(it) }
             }
 
             IncidentFormSectionTitle("Tipo de incidente")
