@@ -1,17 +1,22 @@
 package com.example.myapplication.presentation.incidents
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.domain.model.Incident
 import com.example.myapplication.domain.model.IncidentSeverity
 import com.example.myapplication.domain.model.IncidentType
+import com.example.myapplication.domain.model.Student
 import com.example.myapplication.domain.model.telegram.TelegramSendOutcome
 import com.example.myapplication.domain.repository.IncidentRepository
+import com.example.myapplication.domain.repository.StudentRepository
 import com.example.myapplication.domain.usecase.incidents.SaveIncidentUseCase
 import com.example.myapplication.domain.usecase.incidents.SendIncidentReportUseCase
+import com.example.myapplication.domain.usecase.ocr.RecognizeTextFromImageUseCase
 import com.example.myapplication.domain.usecase.student.GetStudentsUseCase
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.text.Normalizer
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +29,9 @@ class IncidentViewModel(
     private val getStudentsUseCase: GetStudentsUseCase,
     private val saveIncidentUseCase: SaveIncidentUseCase,
     private val sendIncidentReportUseCase: SendIncidentReportUseCase,
-    private val incidentRepository: IncidentRepository
+    private val incidentRepository: IncidentRepository,
+    private val studentRepository: StudentRepository,
+    private val recognizeTextFromImageUseCase: RecognizeTextFromImageUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(IncidentUiState())
@@ -42,6 +49,13 @@ class IncidentViewModel(
             is IncidentEvent.TypeSelected -> onTypeSelected(event.type)
             is IncidentEvent.SeveritySelected -> onSeveritySelected(event.severity)
             is IncidentEvent.DescriptionChanged -> onDescriptionChanged(event.description)
+            is IncidentEvent.OcrImageSelected -> processOcr(event.uri)
+            IncidentEvent.ApplyOcrSuggestions -> applyOcrSuggestions()
+            is IncidentEvent.ToggleManualStudentForm -> toggleManualStudentForm(event.enabled)
+            is IncidentEvent.ManualStudentNameChanged -> updateManualStudentDraft { copy(fullName = event.value) }
+            is IncidentEvent.ManualStudentGradeChanged -> updateManualStudentDraft { copy(grade = event.value) }
+            is IncidentEvent.ManualStudentSectionChanged -> updateManualStudentDraft { copy(section = event.value) }
+            is IncidentEvent.ManualRepresentativeChanged -> updateManualStudentDraft { copy(representativeName = event.value) }
             IncidentEvent.SaveIncidentClicked -> saveIncident()
             IncidentEvent.SendReportClicked -> sendIncidentReport()
             IncidentEvent.ClearForm -> clearForm()
@@ -78,10 +92,17 @@ class IncidentViewModel(
                         selectedSeverity = _uiState.value.selectedSeverity,
                         description = _uiState.value.description,
                         lastSavedIncidentId = _uiState.value.lastSavedIncidentId,
+                        isProcessingOcr = _uiState.value.isProcessingOcr,
+                        detectedOcrText = _uiState.value.detectedOcrText,
+                        ocrSuggestedStudentName = _uiState.value.ocrSuggestedStudentName,
+                        ocrMatchMessage = _uiState.value.ocrMatchMessage,
+                        showManualStudentForm = _uiState.value.showManualStudentForm,
+                        manualStudentDraft = _uiState.value.manualStudentDraft,
                         sendStatus = _uiState.value.sendStatus,
                         isLoadingStudents = false,
                         isLoadingIncidents = false,
                         studentError = _uiState.value.studentError,
+                        manualStudentError = _uiState.value.manualStudentError,
                         typeError = _uiState.value.typeError,
                         descriptionError = _uiState.value.descriptionError,
                         errorMessage = _uiState.value.errorMessage,
@@ -106,9 +127,11 @@ class IncidentViewModel(
         _uiState.update {
             it.copy(
                 selectedStudentId = studentId,
+                showManualStudentForm = false,
                 lastSavedIncidentId = null,
                 sendStatus = IncidentSendStatus.Idle,
                 studentError = null,
+                manualStudentError = null,
                 errorMessage = null,
                 successMessage = null
             )
@@ -158,13 +181,26 @@ class IncidentViewModel(
             if (!validateForm()) return@launch
             _uiState.update { it.copy(isSaving = true, errorMessage = null, successMessage = null) }
             val current = _uiState.value
-            val incident = buildIncidentFromState(current)
+            val studentId = resolveStudentId(current)
+                ?: run {
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            studentError = "Selecciona o registra un estudiante antes de guardar.",
+                            manualStudentError = "No se pudo resolver el estudiante del incidente.",
+                            errorMessage = "Selecciona o registra un estudiante antes de guardar."
+                        )
+                    }
+                    return@launch
+                }
+            val incident = buildIncidentFromState(current, studentId)
             runCatching {
                 saveIncidentUseCase(incident)
             }.onSuccess { incidentId ->
                 _uiState.update {
                     it.copy(
                         isSaving = false,
+                        selectedStudentId = studentId,
                         lastSavedIncidentId = incidentId,
                         successMessage = "Incidente guardado localmente.",
                         errorMessage = null
@@ -192,7 +228,19 @@ class IncidentViewModel(
                 )
             }
             val current = _uiState.value
-            val student = current.selectedStudent
+            val studentId = resolveStudentId(current)
+                ?: run {
+                    _uiState.update {
+                        it.copy(
+                            sendStatus = IncidentSendStatus.Error("Selecciona o registra un estudiante valido."),
+                            studentError = "Selecciona o registra un estudiante.",
+                            manualStudentError = "No se pudo resolver el estudiante del incidente.",
+                            errorMessage = "Selecciona o registra un estudiante valido."
+                        )
+                    }
+                    return@launch
+                }
+            val student = resolveStudent(current, studentId)
             if (student == null) {
                 _uiState.update {
                     it.copy(
@@ -205,7 +253,7 @@ class IncidentViewModel(
             }
 
             val incidentId = current.lastSavedIncidentId
-                ?: runCatching { saveIncidentUseCase(buildIncidentFromState(current)) }
+                ?: runCatching { saveIncidentUseCase(buildIncidentFromState(current, studentId)) }
                     .getOrElse { throwable ->
                         _uiState.update {
                             it.copy(
@@ -218,12 +266,13 @@ class IncidentViewModel(
                         return@launch
                     }
             val incident = incidentRepository.getIncidentById(incidentId)
-                ?: buildIncidentFromState(current).copy(id = incidentId)
+                ?: buildIncidentFromState(current, studentId).copy(id = incidentId)
 
             when (val outcome = sendIncidentReportUseCase(student, incident)) {
                 is TelegramSendOutcome.Success -> {
                     _uiState.update {
                         it.copy(
+                            selectedStudentId = studentId,
                             lastSavedIncidentId = incidentId,
                             sendStatus = IncidentSendStatus.Success,
                             successMessage = "Reporte enviado por Telegram.",
@@ -253,8 +302,15 @@ class IncidentViewModel(
                 selectedSeverity = IncidentSeverity.MEDIUM,
                 description = "",
                 lastSavedIncidentId = null,
+                isProcessingOcr = false,
+                detectedOcrText = "",
+                ocrSuggestedStudentName = null,
+                ocrMatchMessage = null,
+                showManualStudentForm = false,
+                manualStudentDraft = ManualStudentDraft(),
                 sendStatus = IncidentSendStatus.Idle,
                 studentError = null,
+                manualStudentError = null,
                 typeError = null,
                 descriptionError = null,
                 errorMessage = null,
@@ -267,9 +323,16 @@ class IncidentViewModel(
         val current = _uiState.value
         val description = current.description.trim()
         val studentError = when {
-            current.selectedStudentId == null -> "Selecciona un estudiante."
-            current.selectedStudent == null -> "El estudiante seleccionado no esta disponible."
+            current.selectedStudent != null -> null
+            !current.showManualStudentForm -> "Selecciona un estudiante o agrégalo manualmente."
+            current.manualStudentDraft.fullName.trim().length < MIN_STUDENT_NAME_LENGTH ->
+                "Ingresa el nombre completo del estudiante."
             else -> null
+        }
+        val manualStudentError = if (current.showManualStudentForm && current.manualStudentDraft.fullName.trim().length < MIN_STUDENT_NAME_LENGTH) {
+            "El nombre del estudiante debe tener al menos $MIN_STUDENT_NAME_LENGTH caracteres."
+        } else {
+            null
         }
         val typeError = if (current.selectedType == null) "Selecciona un tipo de incidente." else null
         val descriptionError = when {
@@ -280,16 +343,17 @@ class IncidentViewModel(
         _uiState.update {
             it.copy(
                 studentError = studentError,
+                manualStudentError = manualStudentError,
                 typeError = typeError,
                 descriptionError = descriptionError,
-                errorMessage = listOfNotNull(studentError, typeError, descriptionError).firstOrNull()
+                errorMessage = listOfNotNull(studentError, manualStudentError, typeError, descriptionError).firstOrNull()
             )
         }
-        return studentError == null && typeError == null && descriptionError == null
+        return studentError == null && manualStudentError == null && typeError == null && descriptionError == null
     }
 
-    private fun buildIncidentFromState(state: IncidentUiState): Incident = Incident(
-        studentId = requireNotNull(state.selectedStudentId),
+    private fun buildIncidentFromState(state: IncidentUiState, studentId: Long): Incident = Incident(
+        studentId = studentId,
         type = requireNotNull(state.selectedType),
         severity = state.selectedSeverity,
         description = state.description.trim(),
@@ -303,7 +367,190 @@ class IncidentViewModel(
         _uiState.update { it.copy(errorMessage = null, successMessage = null) }
     }
 
+    private fun processOcr(uri: Uri) {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isProcessingOcr = true,
+                    errorMessage = null,
+                    successMessage = null
+                )
+            }
+            val result = recognizeTextFromImageUseCase(uri)
+            result.onSuccess { ocr ->
+                _uiState.update {
+                    it.copy(
+                        isProcessingOcr = false,
+                        detectedOcrText = ocr.rawText,
+                        successMessage = "Texto detectado. Revisa y aplica la sugerencia OCR."
+                    )
+                }
+            }.onFailure { throwable ->
+                _uiState.update {
+                    it.copy(
+                        isProcessingOcr = false,
+                        errorMessage = throwable.message ?: "No se pudo procesar la fotografia del incidente."
+                    )
+                }
+            }
+        }
+    }
+
+    private fun applyOcrSuggestions() {
+        val state = _uiState.value
+        if (state.detectedOcrText.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "No hay texto OCR para procesar.") }
+            return
+        }
+
+        val lines = state.detectedOcrText
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toList()
+
+        val studentMatch = findBestStudentMatch(lines, state.students)
+        val suggestedName = studentMatch?.student?.fullName ?: extractLikelyStudentName(lines)
+
+        _uiState.update {
+            it.copy(
+                selectedStudentId = studentMatch?.student?.id,
+                showManualStudentForm = studentMatch == null,
+                manualStudentDraft = if (studentMatch == null) {
+                    it.manualStudentDraft.copy(
+                        fullName = suggestedName ?: it.manualStudentDraft.fullName
+                    )
+                } else {
+                    it.manualStudentDraft
+                },
+                description = if (it.description.isBlank()) state.detectedOcrText.trim() else it.description,
+                ocrSuggestedStudentName = suggestedName,
+                ocrMatchMessage = studentMatch?.let { match ->
+                    "Estudiante detectado en base: ${match.student.fullName}."
+                } ?: suggestedName?.let { name ->
+                    "No se encontro \"$name\" en la base. Puedes registrarlo manualmente."
+                } ?: "No se pudo identificar el estudiante en el texto OCR.",
+                studentError = null,
+                manualStudentError = null,
+                successMessage = "Sugerencia OCR aplicada. Verifica antes de guardar."
+            )
+        }
+    }
+
+    private fun toggleManualStudentForm(enabled: Boolean) {
+        _uiState.update {
+            it.copy(
+                showManualStudentForm = enabled,
+                selectedStudentId = if (enabled) null else it.selectedStudentId,
+                studentError = null,
+                manualStudentError = null,
+                errorMessage = null,
+                successMessage = null
+            )
+        }
+    }
+
+    private fun updateManualStudentDraft(update: ManualStudentDraft.() -> ManualStudentDraft) {
+        _uiState.update {
+            it.copy(
+                manualStudentDraft = it.manualStudentDraft.update(),
+                studentError = null,
+                manualStudentError = null,
+                errorMessage = null,
+                successMessage = null
+            )
+        }
+    }
+
+    private suspend fun resolveStudentId(state: IncidentUiState): Long? {
+        state.selectedStudent?.let { return it.id }
+        if (!state.showManualStudentForm) return null
+
+        val manualName = state.manualStudentDraft.fullName.trim()
+        if (manualName.length < MIN_STUDENT_NAME_LENGTH) return null
+
+        val normalizedManualName = normalizeText(manualName)
+        state.students.firstOrNull { normalizeText(it.fullName) == normalizedManualName }?.let { existing ->
+            return existing.id
+        }
+
+        val newStudent = Student(
+            id = nextLocalStudentId(state.students),
+            fullName = manualName,
+            grade = state.manualStudentDraft.grade.trim().ifBlank { "Por definir" },
+            section = state.manualStudentDraft.section.trim().ifBlank { "S/N" },
+            representativeName = state.manualStudentDraft.representativeName.trim().ifBlank { "Por definir" }
+        )
+        studentRepository.upsertStudents(listOf(newStudent))
+        return newStudent.id
+    }
+
+    private fun resolveStudent(state: IncidentUiState, studentId: Long): Student? =
+        state.students.firstOrNull { it.id == studentId } ?: run {
+            if (!state.showManualStudentForm) {
+                null
+            } else {
+                Student(
+                    id = studentId,
+                    fullName = state.manualStudentDraft.fullName.trim(),
+                    grade = state.manualStudentDraft.grade.trim().ifBlank { "Por definir" },
+                    section = state.manualStudentDraft.section.trim().ifBlank { "S/N" },
+                    representativeName = state.manualStudentDraft.representativeName.trim().ifBlank { "Por definir" }
+                )
+            }
+        }
+
+    private fun findBestStudentMatch(lines: List<String>, students: List<Student>): StudentLineMatch? {
+        return students.mapNotNull { student ->
+            val normalizedStudent = normalizeText(student.fullName)
+            val studentTokens = normalizedStudent.split(" ").filter { token -> token.length > 2 }.toSet()
+            val bestLine = lines.map { line ->
+                val normalizedLine = normalizeText(line)
+                val exact = normalizedLine.contains(normalizedStudent)
+                val matchedTokens = studentTokens.count { token -> normalizedLine.contains(token) }
+                val score = when {
+                    exact -> 1.0
+                    studentTokens.isEmpty() -> 0.0
+                    else -> matchedTokens.toDouble() / studentTokens.size.toDouble()
+                }
+                line to score
+            }.maxByOrNull { it.second } ?: return@mapNotNull null
+
+            if (bestLine.second >= MIN_STUDENT_MATCH_SCORE) {
+                StudentLineMatch(student = student, line = bestLine.first, score = bestLine.second)
+            } else {
+                null
+            }
+        }.maxByOrNull { it.score }
+    }
+
+    private fun extractLikelyStudentName(lines: List<String>): String? =
+        lines
+            .map { it.trim() }
+            .firstOrNull { line ->
+                val words = normalizeText(line).split(" ").filter { token -> token.length > 1 }
+                words.size in 2..5 && line.any(Char::isLetter)
+            }
+
+    private fun normalizeText(value: String): String =
+        Normalizer.normalize(value.lowercase(), Normalizer.Form.NFD)
+            .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+            .replace("[^a-z0-9 ]".toRegex(), " ")
+            .replace("\\s+".toRegex(), " ")
+            .trim()
+
+    private fun nextLocalStudentId(students: List<Student>): Long =
+        (students.maxOfOrNull { it.id } ?: 0L) + 1L
+
     companion object {
         private const val MIN_DESCRIPTION_LENGTH = 10
+        private const val MIN_STUDENT_NAME_LENGTH = 5
+        private const val MIN_STUDENT_MATCH_SCORE = 0.6
     }
 }
+
+private data class StudentLineMatch(
+    val student: Student,
+    val line: String,
+    val score: Double
+)

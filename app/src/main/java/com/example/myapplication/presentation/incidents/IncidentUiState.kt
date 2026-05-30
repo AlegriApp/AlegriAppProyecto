@@ -17,9 +17,16 @@ data class IncidentUiState(
     val lastSavedIncidentId: Long? = null,
     val isLoadingStudents: Boolean = false,
     val isLoadingIncidents: Boolean = false,
+    val isProcessingOcr: Boolean = false,
     val isSaving: Boolean = false,
+    val detectedOcrText: String = "",
+    val ocrSuggestedStudentName: String? = null,
+    val ocrMatchMessage: String? = null,
+    val showManualStudentForm: Boolean = false,
+    val manualStudentDraft: ManualStudentDraft = ManualStudentDraft(),
     val sendStatus: IncidentSendStatus = IncidentSendStatus.Idle,
     val studentError: String? = null,
+    val manualStudentError: String? = null,
     val typeError: String? = null,
     val descriptionError: String? = null,
     val errorMessage: String? = null,
@@ -29,8 +36,15 @@ data class IncidentUiState(
         get() = students.firstOrNull { it.id == selectedStudentId }
 
     val canSubmit: Boolean
-        get() = !isLoadingStudents && !isSaving && sendStatus !is IncidentSendStatus.Sending
+        get() = !isLoadingStudents && !isSaving && !isProcessingOcr && sendStatus !is IncidentSendStatus.Sending
 }
+
+data class ManualStudentDraft(
+    val fullName: String = "",
+    val grade: String = "",
+    val section: String = "",
+    val representativeName: String = ""
+)
 
 data class IncidentHistoryItem(
     val incident: Incident,
