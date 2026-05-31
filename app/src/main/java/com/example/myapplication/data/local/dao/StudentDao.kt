@@ -10,15 +10,42 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface StudentDao {
 
-    @Query("SELECT * FROM students ORDER BY fullName ASC")
+    @Query("SELECT * FROM students WHERE is_deleted = 0 ORDER BY fullName ASC")
     fun observeStudents(): Flow<List<StudentEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrReplaceStudents(students: List<StudentEntity>)
 
-    @Query("SELECT * FROM students WHERE id = :studentId LIMIT 1")
+    @Query("SELECT * FROM students WHERE id = :studentId AND is_deleted = 0 LIMIT 1")
     suspend fun getStudentById(studentId: Long): StudentEntity?
 
-    @Query("SELECT COUNT(*) FROM students")
+    @Query("SELECT * FROM students WHERE uuid = :uuid LIMIT 1")
+    suspend fun getByUuid(uuid: String): StudentEntity?
+
+    @Query("SELECT COUNT(*) FROM students WHERE is_deleted = 0")
     suspend fun countStudents(): Int
+
+    // ---------- Cola de sincronización ----------
+
+    @Query("SELECT * FROM students WHERE sync_status IN ('IDLE','ERROR') AND is_deleted = 0")
+    suspend fun getPendingSync(): List<StudentEntity>
+
+    @Query("UPDATE students SET sync_status = 'SENDING', last_sync_attempt = :now WHERE uuid = :uuid")
+    suspend fun markAsSending(uuid: String, now: Long)
+
+    @Query(
+        "UPDATE students SET sync_status = 'SUCCESS', sync_error = NULL, " +
+            "remote_id = :remoteId, server_updated_at = :serverTs " +
+            "WHERE uuid = :uuid"
+    )
+    suspend fun markAsSynced(uuid: String, remoteId: Long?, serverTs: Long?)
+
+    @Query("UPDATE students SET sync_status = 'ERROR', sync_error = :error, last_sync_attempt = :now WHERE uuid = :uuid")
+    suspend fun markAsFailed(uuid: String, error: String, now: Long)
+
+    @Query(
+        "SELECT COUNT(*) FROM students " +
+            "WHERE sync_status IN ('IDLE','ERROR') AND is_deleted = 0"
+    )
+    fun observePendingCount(): Flow<Int>
 }

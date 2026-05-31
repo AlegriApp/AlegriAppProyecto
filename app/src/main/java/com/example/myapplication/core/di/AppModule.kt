@@ -5,8 +5,11 @@ import androidx.room.Room
 import com.example.myapplication.BuildConfig
 import com.example.myapplication.data.local.AppDatabase
 import com.example.myapplication.data.local.DatabaseSeeder
+import com.example.myapplication.data.local.migrations.Migration_5_6
 import com.example.myapplication.core.network.NetworkMonitor
 import com.example.myapplication.core.network.RetrofitClient
+import com.example.myapplication.core.preferences.SyncPreferences
+import com.example.myapplication.core.sync.SyncScheduler
 import com.example.myapplication.data.remote.api.SupabaseApiService
 import com.example.myapplication.data.repository.AttendanceRepositoryImpl
 import com.example.myapplication.data.repository.GradeRepositoryImpl
@@ -52,23 +55,42 @@ object AppModule {
     @Volatile
     private var supabaseApi: SupabaseApiService? = null
 
+    @Volatile
+    private var syncScheduler: SyncScheduler? = null
+
+    @Volatile
+    private var syncPreferences: SyncPreferences? = null
+
     fun provideDatabase(context: Context): AppDatabase =
         db ?: synchronized(this) {
             db ?: Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "alegriapp.db"
-            ).fallbackToDestructiveMigration().build().also { database ->
-                runBlocking(Dispatchers.IO) {
-                    DatabaseSeeder.seedIfEmpty(database)
+            )
+                .addMigrations(Migration_5_6)
+                .build()
+                .also { database ->
+                    runBlocking(Dispatchers.IO) {
+                        DatabaseSeeder.seedIfEmpty(database)
+                    }
+                    db = database
                 }
-                db = database
-            }
         }
 
     fun provideNetworkMonitor(context: Context): NetworkMonitor =
         networkMonitor ?: synchronized(this) {
             networkMonitor ?: NetworkMonitor(context.applicationContext).also { networkMonitor = it }
+        }
+
+    fun provideSyncScheduler(context: Context): SyncScheduler =
+        syncScheduler ?: synchronized(this) {
+            syncScheduler ?: SyncScheduler(context.applicationContext).also { syncScheduler = it }
+        }
+
+    fun provideSyncPreferences(context: Context): SyncPreferences =
+        syncPreferences ?: synchronized(this) {
+            syncPreferences ?: SyncPreferences(context.applicationContext).also { syncPreferences = it }
         }
 
     fun provideSupabaseApiService(): SupabaseApiService? =
@@ -86,6 +108,7 @@ object AppModule {
             studentDao = database.studentDao(),
             attendanceDao = database.attendanceDao(),
             gradeDao = database.gradeDao(),
+            incidentDao = database.incidentDao(),
             networkMonitor = provideNetworkMonitor(context)
         )
     }

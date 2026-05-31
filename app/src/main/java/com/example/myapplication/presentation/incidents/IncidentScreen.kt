@@ -97,7 +97,9 @@ fun IncidentScreenRoute(
             sendIncidentReportUseCase = AppModule.provideSendIncidentReportUseCase(context),
             incidentRepository = AppModule.provideIncidentRepository(context),
             studentRepository = AppModule.provideStudentRepository(context),
-            recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context)
+            recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context),
+            networkMonitor = AppModule.provideNetworkMonitor(context),
+            syncPreferences = AppModule.provideSyncPreferences(context)
         )
     }
     IncidentScreenContent(
@@ -170,14 +172,20 @@ private fun IncidentScreenContent(
         ) {
             val contentMaxWidth = if (maxWidth > 900.dp) 820.dp else maxWidth
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                contentPadding = PaddingValues(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (uiState.isOffline) {
+                    com.example.myapplication.presentation.common.OfflineBanner(
+                        lastSuccessfulSyncEpochMs = uiState.lastSuccessfulSyncEpochMs
+                    )
+                }
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
                 item {
                     Column(
                         modifier = Modifier
@@ -242,6 +250,7 @@ private fun IncidentScreenContent(
                             .padding(horizontal = 16.dp)
                             .widthIn(max = contentMaxWidth)
                     )
+                }
                 }
             }
         }

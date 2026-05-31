@@ -10,13 +10,26 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface AttendanceDao {
 
-    @Query("SELECT * FROM asistencias WHERE fecha = :date ORDER BY estudiante_id ASC")
+    // ---------- Lectura para UI (filtra eliminados lógicos) ----------
+
+    @Query(
+        "SELECT * FROM asistencias " +
+            "WHERE fecha = :date AND is_deleted = 0 " +
+            "ORDER BY estudiante_id ASC"
+    )
     fun observeAttendanceByDate(date: String): Flow<List<AttendanceEntity>>
 
     @Query(
-        "SELECT * FROM asistencias WHERE estudiante_id = :studentId AND fecha = :date LIMIT 1"
+        "SELECT * FROM asistencias " +
+            "WHERE estudiante_id = :studentId AND fecha = :date AND is_deleted = 0 " +
+            "LIMIT 1"
     )
     suspend fun getByStudentAndDate(studentId: Long, date: String): AttendanceEntity?
+
+    @Query("SELECT * FROM asistencias WHERE uuid = :uuid LIMIT 1")
+    suspend fun getByUuid(uuid: String): AttendanceEntity?
+
+    // ---------- Escritura ----------
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrReplaceAttendance(attendance: AttendanceEntity)
@@ -24,9 +37,59 @@ interface AttendanceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrReplaceAttendanceList(attendanceList: List<AttendanceEntity>)
 
-    @Query("SELECT * FROM asistencias WHERE sincronizacion_pendiente = 1")
+    // ---------- Cola de sincronización (estados oficiales del cronograma) ----------
+
+    @Query(
+        "SELECT * FROM asistencias " +
+            "WHERE sync_status IN ('IDLE','ERROR') AND is_deleted = 0"
+    )
+    suspend fun getPendingSync(): List<AttendanceEntity>
+
+    @Query(
+        "SELECT * FROM asistencias " +
+            "WHERE is_deleted = 1 AND sync_status != 'SUCCESS'"
+    )
+    suspend fun getPendingDeletes(): List<AttendanceEntity>
+
+    @Query(
+        "UPDATE asistencias SET sync_status = 'SENDING', last_sync_attempt = :now " +
+            "WHERE uuid = :uuid"
+    )
+    suspend fun markAsSending(uuid: String, now: Long)
+
+    @Query(
+        "UPDATE asistencias SET sync_status = 'SUCCESS', sync_error = NULL, " +
+            "remote_id = :remoteId, server_updated_at = :serverTs, " +
+            "sincronizacion_pendiente = 0 " +
+            "WHERE uuid = :uuid"
+    )
+    suspend fun markAsSynced(uuid: String, remoteId: Long?, serverTs: Long?)
+
+    @Query(
+        "UPDATE asistencias SET sync_status = 'ERROR', sync_error = :error, " +
+            "last_sync_attempt = :now WHERE uuid = :uuid"
+    )
+    suspend fun markAsFailed(uuid: String, error: String, now: Long)
+
+    @Query(
+        "UPDATE asistencias SET is_deleted = 1, sync_status = 'IDLE' " +
+            "WHERE uuid = :uuid"
+    )
+    suspend fun softDelete(uuid: String)
+
+    // ---------- Compat (queda durante la transición) ----------
+
+    @Query("SELECT * FROM asistencias WHERE sincronizacion_pendiente = 1 AND is_deleted = 0")
     suspend fun getPendingSyncAttendance(): List<AttendanceEntity>
 
-    @Query("UPDATE asistencias SET sincronizacion_pendiente = 0 WHERE id IN (:ids)")
+    @Query("UPDATE asistencias SET sincronizacion_pendiente = 0, sync_status = 'SUCCESS' WHERE id IN (:ids)")
     suspend fun markAsSynced(ids: List<Long>)
+
+    // ---------- Métricas ----------
+
+    @Query(
+        "SELECT COUNT(*) FROM asistencias " +
+            "WHERE sync_status IN ('IDLE','ERROR') AND is_deleted = 0"
+    )
+    fun observePendingCount(): Flow<Int>
 }

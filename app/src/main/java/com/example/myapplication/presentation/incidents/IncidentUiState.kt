@@ -34,7 +34,10 @@ data class IncidentUiState(
     val typeError: String? = null,
     val descriptionError: String? = null,
     val errorMessage: String? = null,
-    val successMessage: String? = null
+    val successMessage: String? = null,
+    val isOffline: Boolean = false,
+    val pendingSyncCount: Int = 0,
+    val lastSuccessfulSyncEpochMs: Long? = null
 ) {
     val selectedStudent: Student?
         get() = students.firstOrNull { it.id == selectedStudentId }

@@ -1,23 +1,39 @@
 package com.example.myapplication.data.local
 
+import com.example.myapplication.core.common.newUuid
 import com.example.myapplication.data.local.entity.GradeEntity
 import com.example.myapplication.data.local.entity.StudentEntity
+import com.example.myapplication.domain.model.sync.SyncState
 
 /**
  * Población inicial de Room para desbloquear Asistencias y Calificaciones.
  * Solo inserta si las tablas están vacías (no re-seed en cada apertura).
+ *
+ * Los registros seed se marcan `SyncState.SUCCESS` y `localOnly`-equivalente:
+ * son datos de demo, no deben sincronizarse a Supabase.
  */
 object DatabaseSeeder {
 
     private val demoStudents = listOf(
-        StudentEntity(1, "María González Pérez", "5", "A", "Ana González", null),
-        StudentEntity(2, "Carlos Rodríguez López", "5", "A", "Luis Rodríguez", null),
-        StudentEntity(3, "Valentina Martínez Ruiz", "5", "A", "Carmen Martínez", null),
-        StudentEntity(4, "Diego Hernández Silva", "5", "A", "Pedro Hernández", null),
-        StudentEntity(5, "Sofía Pérez Morales", "5", "A", "Rosa Pérez", null),
-        StudentEntity(6, "Andrés Jiménez Castro", "5", "A", "Jorge Jiménez", null),
-        StudentEntity(7, "Isabella Torres Vega", "5", "A", "Patricia Torres", null),
-        StudentEntity(8, "Mateo Ramírez Díaz", "5", "A", "Miguel Ramírez", null)
+        demoStudent(1, "María González Pérez"),
+        demoStudent(2, "Carlos Rodríguez López"),
+        demoStudent(3, "Valentina Martínez Ruiz"),
+        demoStudent(4, "Diego Hernández Silva"),
+        demoStudent(5, "Sofía Pérez Morales"),
+        demoStudent(6, "Andrés Jiménez Castro"),
+        demoStudent(7, "Isabella Torres Vega"),
+        demoStudent(8, "Mateo Ramírez Díaz")
+    )
+
+    private fun demoStudent(id: Long, fullName: String) = StudentEntity(
+        id = id,
+        fullName = fullName,
+        grade = "5",
+        section = "A",
+        representativeName = "Representante demo",
+        telegramChatId = null,
+        uuid = newUuid(),
+        syncStatus = SyncState.Stored.SUCCESS
     )
 
     suspend fun seedIfEmpty(database: AppDatabase) {
@@ -35,25 +51,26 @@ object DatabaseSeeder {
     private fun buildDemoGrades(): List<GradeEntity> {
         val grades = mutableListOf<GradeEntity>()
         demoStudents.forEach { student ->
-            grades += GradeEntity(
-                studentId = student.id,
-                description = "Evaluación diagnóstica",
-                score = 16.0,
-                maxScore = 20.0,
-                subjectName = "General",
-                periodName = "Actual",
-                evaluationTypeName = "Diagnóstica"
-            )
-            grades += GradeEntity(
-                studentId = student.id,
-                description = "Trabajo en clase",
-                score = 18.0,
-                maxScore = 20.0,
-                subjectName = "General",
-                periodName = "Actual",
-                evaluationTypeName = "Formativa"
-            )
+            grades += demoGrade(student.id, "Evaluación diagnóstica", 16.0, "Diagnóstica")
+            grades += demoGrade(student.id, "Trabajo en clase", 18.0, "Formativa")
         }
         return grades
     }
+
+    private fun demoGrade(
+        studentId: Long,
+        description: String,
+        score: Double,
+        evaluationType: String
+    ) = GradeEntity(
+        studentId = studentId,
+        description = description,
+        score = score,
+        maxScore = 20.0,
+        subjectName = "General",
+        periodName = "Actual",
+        evaluationTypeName = evaluationType,
+        uuid = newUuid(),
+        syncStatus = SyncState.Stored.SUCCESS
+    )
 }

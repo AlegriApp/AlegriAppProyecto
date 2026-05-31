@@ -2,8 +2,9 @@ package com.example.myapplication.data.remote.dto
 
 import com.google.gson.annotations.SerializedName
 
-/** Inserción en tabla `calificaciones` (alegriapp_create_tables_og.txt). */
+/** Inserción / upsert en tabla `calificaciones` (alegriapp_create_tables_og.txt). */
 data class CalificacionInsertDto(
+    val uuid: String,
     @SerializedName("estudiante_id") val estudianteId: Long,
     @SerializedName("materia_id") val materiaId: Long,
     @SerializedName("curso_id") val cursoId: Long,
@@ -19,6 +20,9 @@ data class CalificacionInsertDto(
 
 data class CalificacionRemoteResponseDto(
     val id: Long,
+    val uuid: String? = null,
     @SerializedName("estudiante_id") val estudianteId: Long,
-    @SerializedName("nota_obtenida") val notaObtenida: Double
+    @SerializedName("nota_obtenida") val notaObtenida: Double,
+    @SerializedName("updated_at") val updatedAt: String? = null,
+    @SerializedName("deleted_at") val deletedAt: String? = null
 )
