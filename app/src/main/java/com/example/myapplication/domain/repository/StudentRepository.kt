@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface StudentRepository {
     fun observeStudents(): Flow<List<Student>>
+    fun observeStudentsByCourse(courseId: Long): Flow<List<Student>>
     suspend fun upsertStudents(students: List<Student>)
     /** Busca un estudiante local por su PK Room. Devuelve null si no existe o fue soft-deleted. */
     suspend fun findById(studentId: Long): Student?

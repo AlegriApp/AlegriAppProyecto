@@ -12,10 +12,22 @@ object SupabaseConfig {
     /** PULL only — mobile no inserta, solo lee. */
     const val INCIDENTES_TABLE = "incidentes"
     const val TIPOS_INCIDENTE_TABLE = "tipos_incidente"
+    const val CURSOS_TABLE = "cursos"
+    const val MATERIAS_TABLE = "materias"
+    const val TIPOS_EVALUACION_TABLE = "tipos_evaluacion"
+    const val PERIODOS_ACADEMICOS_TABLE = "periodos_academicos"
+    const val CONFIGURACION_TELEGRAM_TABLE = "configuracion_telegram"
+    const val ESTUDIANTE_CURSO_TABLE = "estudiante_curso"
 
+    /**
+     * Select alineado con [alegriapp_create_tables_og.txt]: `estudiante_representante` no tiene
+     * columna `estado` (solo `deleted_at`). Pedir `estado` en el embed provoca HTTP 400 en PostgREST.
+     */
     const val ESTUDIANTE_SELECT =
         "id,uuid,codigo_institucional,nombre,apellido,estado,updated_at,deleted_at," +
-            "estudiante_curso(estado,cursos(paralelo,niveles_academicos(nombre)))"
+            "estudiante_curso(curso_id,estado,cursos(id,nombre,paralelo,niveles_academicos(nombre)))," +
+            "estudiante_representante(es_principal,representante_id,deleted_at," +
+            "representantes(id,nombre,apellido,configuracion_telegram(id,chat_id,token_bot_encriptado,estado_integracion,deleted_at)))"
 
     /**
      * Select de incidentes para PULL. Trae solo columnas necesarias para mobile.

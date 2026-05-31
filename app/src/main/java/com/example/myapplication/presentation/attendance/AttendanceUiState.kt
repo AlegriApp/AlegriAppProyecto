@@ -9,6 +9,11 @@ data class AttendanceUiState(
     val dateLabel: String = "",
     val selectedDate: String = "",
     val courseName: String = "",
+    val subjectName: String = "",
+    val courses: List<Pair<Long, String>> = emptyList(),
+    val subjects: List<Pair<Long, String>> = emptyList(),
+    val selectedCourseId: Long? = null,
+    val selectedSubjectId: Long? = null,
     val students: List<AttendanceStudentUi> = emptyList(),
     val attendanceByStudent: Map<Long, AttendanceStatus> = emptyMap(),
     val presentCount: Int = 0,
@@ -163,6 +168,7 @@ data class AttendanceSummary(
 data class AttendanceReportPreview(
     val dateLabel: String,
     val courseName: String,
+    val subjectName: String = "",
     val totalStudents: Int,
     val summary: AttendanceSummary,
     val entries: List<AttendanceReportEntry>

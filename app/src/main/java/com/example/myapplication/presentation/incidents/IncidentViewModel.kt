@@ -15,7 +15,11 @@ import com.example.myapplication.domain.repository.StudentRepository
 import com.example.myapplication.domain.usecase.incidents.SaveIncidentUseCase
 import com.example.myapplication.domain.usecase.incidents.SendIncidentReportUseCase
 import com.example.myapplication.domain.usecase.ocr.RecognizeTextFromImageUseCase
-import com.example.myapplication.domain.usecase.student.GetStudentsUseCase
+import com.example.myapplication.domain.model.sync.SyncOutcome
+import com.example.myapplication.domain.repository.CatalogRepository
+import com.example.myapplication.domain.repository.SyncRepository
+import com.example.myapplication.domain.usecase.student.GetStudentsByCourseUseCase
+import com.example.myapplication.presentation.common.CatalogOption
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.text.Normalizer
@@ -25,22 +29,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class IncidentViewModel(
-    private val getStudentsUseCase: GetStudentsUseCase,
+    private val getStudentsByCourseUseCase: GetStudentsByCourseUseCase,
+    private val catalogRepository: CatalogRepository,
     private val saveIncidentUseCase: SaveIncidentUseCase,
     private val sendIncidentReportUseCase: SendIncidentReportUseCase,
     private val incidentRepository: IncidentRepository,
     private val studentRepository: StudentRepository,
     private val recognizeTextFromImageUseCase: RecognizeTextFromImageUseCase,
     private val networkMonitor: NetworkMonitor? = null,
-    private val syncPreferences: SyncPreferences? = null
+    private val syncPreferences: SyncPreferences? = null,
+    private val syncRepository: SyncRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(IncidentUiState())
     val uiState: StateFlow<IncidentUiState> = _uiState.asStateFlow()
     private var observeJob: Job? = null
+    private var studentsJob: Job? = null
 
     init {
         networkMonitor?.let { monitor ->
@@ -57,14 +65,38 @@ class IncidentViewModel(
                 }
             }
         }
-        loadStudents()
+        viewModelScope.launch(Dispatchers.IO) {
+            runInitialSync()
+        }
+        viewModelScope.launch {
+            combine(
+                catalogRepository.observeCourses(),
+                catalogRepository.observeIncidentTypes()
+            ) { courses, types ->
+                courses to types
+            }.collect { (courses, types) ->
+                val courseOptions = courses.map { CatalogOption(it.id, it.displayName) }
+                val typeOptions = types.map { CatalogOption(it.id, it.nombre) }
+                _uiState.update {
+                    it.copy(
+                        courseOptions = courseOptions,
+                        incidentTypeOptions = typeOptions,
+                        selectedCourseId = it.selectedCourseId ?: courseOptions.firstOrNull()?.id,
+                        selectedIncidentTypeId = it.selectedIncidentTypeId ?: typeOptions.firstOrNull()?.id
+                    )
+                }
+                loadStudentsForSelectedCourse()
+            }
+        }
+        loadIncidents()
     }
 
     fun onEvent(event: IncidentEvent) {
         when (event) {
-            IncidentEvent.LoadStudents -> loadStudents()
+            IncidentEvent.LoadStudents -> retryStudentsWithSync()
+            is IncidentEvent.CourseSelected -> onCourseSelected(event.courseId)
             is IncidentEvent.StudentSelected -> onStudentSelected(event.studentId)
-            is IncidentEvent.TypeSelected -> onTypeSelected(event.type)
+            is IncidentEvent.TypeSelected -> onTypeSelected(event.typeId)
             is IncidentEvent.SeveritySelected -> onSeveritySelected(event.severity)
             is IncidentEvent.DescriptionChanged -> onDescriptionChanged(event.description)
             is IncidentEvent.OcrImageSelected -> processOcr(event.uri)
@@ -81,66 +113,106 @@ class IncidentViewModel(
         }
     }
 
-    fun loadStudents() {
+    private fun loadIncidents() {
         observeJob?.cancel()
         observeJob = viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    isLoadingStudents = true,
-                    isLoadingIncidents = true,
-                    errorMessage = null
-                )
-            }
-            runCatching {
-                combine(
-                    getStudentsUseCase(),
-                    incidentRepository.observeIncidents()
-                ) { students, incidents ->
-                    val namesByStudent = students.associate { it.id to it.fullName }
-                    IncidentUiState(
-                        students = students,
+            _uiState.update { it.copy(isLoadingIncidents = true) }
+            incidentRepository.observeIncidents().collect { incidents ->
+                val names = _uiState.value.students.associate { it.id to it.fullName }
+                _uiState.update {
+                    it.copy(
                         incidents = incidents.map { incident ->
                             IncidentHistoryItem(
                                 incident = incident,
-                                studentName = namesByStudent[incident.studentId] ?: "Estudiante no encontrado"
+                                studentName = names[incident.studentId] ?: "Estudiante no encontrado"
                             )
                         },
-                        selectedStudentId = _uiState.value.selectedStudentId,
-                        selectedType = _uiState.value.selectedType,
-                        selectedSeverity = _uiState.value.selectedSeverity,
-                        description = _uiState.value.description,
-                        lastSavedIncidentId = _uiState.value.lastSavedIncidentId,
-                        isProcessingOcr = _uiState.value.isProcessingOcr,
-                        detectedOcrText = _uiState.value.detectedOcrText,
-                        ocrSuggestedStudentName = _uiState.value.ocrSuggestedStudentName,
-                        ocrMatchMessage = _uiState.value.ocrMatchMessage,
-                        hasManualStudentInputSinceLastOcr = _uiState.value.hasManualStudentInputSinceLastOcr,
-                        hasManualTypeSelectionSinceLastOcr = _uiState.value.hasManualTypeSelectionSinceLastOcr,
-                        hasManualSeveritySelectionSinceLastOcr = _uiState.value.hasManualSeveritySelectionSinceLastOcr,
-                        hasManualDescriptionEditSinceLastOcr = _uiState.value.hasManualDescriptionEditSinceLastOcr,
-                        showManualStudentForm = _uiState.value.showManualStudentForm,
-                        manualStudentDraft = _uiState.value.manualStudentDraft,
-                        sendStatus = _uiState.value.sendStatus,
-                        isLoadingStudents = false,
-                        isLoadingIncidents = false,
-                        studentError = _uiState.value.studentError,
-                        manualStudentError = _uiState.value.manualStudentError,
-                        typeError = _uiState.value.typeError,
-                        descriptionError = _uiState.value.descriptionError,
-                        errorMessage = _uiState.value.errorMessage,
-                        successMessage = _uiState.value.successMessage
-                    )
-                }.collect { state ->
-                    _uiState.value = state
-                }
-            }.onFailure { throwable ->
-                _uiState.update {
-                    it.copy(
-                        isLoadingStudents = false,
-                        isLoadingIncidents = false,
-                        errorMessage = throwable.message ?: "No se pudieron cargar los datos de incidentes."
+                        isLoadingIncidents = false
                     )
                 }
+            }
+        }
+    }
+
+    private suspend fun runInitialSync() {
+        _uiState.update { it.copy(isLoadingStudents = true) }
+        val message = runCatching {
+            catalogRepository.syncCatalogsFromRemote()
+            when (val students = syncRepository?.syncStudentsFromRemote()) {
+                is SyncOutcome.Success -> students.message
+                is SyncOutcome.Failure -> students.message
+                is SyncOutcome.Skipped -> students.reason
+                null -> null
+            }
+        }.getOrElse { it.message }
+        applySyncFeedback(message)
+        _uiState.update { it.copy(isLoadingStudents = false) }
+    }
+
+    private fun retryStudentsWithSync() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isLoadingStudents = true, errorMessage = null) }
+            val message = when (val outcome = syncRepository?.syncStudentsFromRemote()) {
+                is SyncOutcome.Success -> outcome.message
+                is SyncOutcome.Failure -> outcome.message
+                is SyncOutcome.Skipped -> outcome.reason
+                null -> "Supabase no configurado. Revisa SUPABASE_URL y SUPABASE_KEY."
+            }
+            applySyncFeedback(message)
+            _uiState.update { it.copy(isLoadingStudents = false) }
+        }
+        loadStudentsForSelectedCourse()
+    }
+
+    private fun applySyncFeedback(message: String?) {
+        if (message.isNullOrBlank()) return
+        val isEnrollmentHint = message.contains("matrículas", ignoreCase = true) ||
+            message.contains("estudiante_curso", ignoreCase = true)
+        _uiState.update { state ->
+            when {
+                message.contains("sin matrículas", ignoreCase = true) ||
+                    message.contains("No hay estudiantes", ignoreCase = true) ->
+                    state.copy(errorMessage = message, successMessage = null)
+                isEnrollmentHint ->
+                    state.copy(successMessage = message, errorMessage = null)
+                else -> state.copy(successMessage = message)
+            }
+        }
+    }
+
+    private fun loadStudentsForSelectedCourse() {
+        val courseId = _uiState.value.selectedCourseId
+        studentsJob?.cancel()
+        if (courseId == null) {
+            _uiState.update { it.copy(students = emptyList(), isLoadingStudents = false) }
+            return
+        }
+        studentsJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingStudents = true) }
+            getStudentsByCourseUseCase(courseId).collect { students ->
+                _uiState.update { it.copy(students = students, isLoadingStudents = false) }
+            }
+        }
+    }
+
+    private fun onCourseSelected(courseId: Long) {
+        _uiState.update {
+            it.copy(
+                selectedCourseId = courseId,
+                selectedStudentId = null,
+                studentError = null
+            )
+        }
+        loadStudentsForSelectedCourse()
+        viewModelScope.launch(Dispatchers.IO) {
+            syncRepository?.syncStudentsFromRemote()?.let { outcome ->
+                applySyncFeedback(
+                    when (outcome) {
+                        is SyncOutcome.Success -> outcome.message
+                        is SyncOutcome.Failure -> outcome.message
+                        is SyncOutcome.Skipped -> outcome.reason
+                    }
+                )
             }
         }
     }
@@ -161,10 +233,10 @@ class IncidentViewModel(
         }
     }
 
-    fun onTypeSelected(type: IncidentType) {
+    fun onTypeSelected(typeId: Long) {
         _uiState.update {
             it.copy(
-                selectedType = type,
+                selectedIncidentTypeId = typeId,
                 hasManualTypeSelectionSinceLastOcr = true,
                 lastSavedIncidentId = null,
                 sendStatus = IncidentSendStatus.Idle,
@@ -324,7 +396,7 @@ class IncidentViewModel(
         _uiState.update {
             it.copy(
                 selectedStudentId = null,
-                selectedType = null,
+                selectedIncidentTypeId = null,
                 selectedSeverity = IncidentSeverity.MEDIUM,
                 description = "",
                 lastSavedIncidentId = null,
@@ -364,7 +436,7 @@ class IncidentViewModel(
         } else {
             null
         }
-        val typeError = if (current.selectedType == null) "Selecciona un tipo de incidente." else null
+        val typeError = if (current.selectedIncidentTypeId == null) "Selecciona un tipo de incidente." else null
         val descriptionError = when {
             description.isBlank() -> "Describe el incidente."
             description.length < MIN_DESCRIPTION_LENGTH -> "La descripcion debe tener al menos $MIN_DESCRIPTION_LENGTH caracteres."
@@ -384,7 +456,7 @@ class IncidentViewModel(
 
     private fun buildIncidentFromState(state: IncidentUiState, studentId: Long): Incident = Incident(
         studentId = studentId,
-        type = requireNotNull(state.selectedType),
+        type = requireNotNull(state.selectedIncidentTypeId).toString(),
         severity = state.selectedSeverity,
         description = state.description.trim(),
         dateTime = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
@@ -523,10 +595,11 @@ class IncidentViewModel(
                     current.showManualStudentForm
                 },
                 manualStudentDraft = manualStudentDraft,
-                selectedType = if (shouldUpdateType) {
-                    analysis.detectedType ?: current.selectedType ?: IncidentType.OTHER
+                selectedIncidentTypeId = if (shouldUpdateType) {
+                    analysis.detectedTypeId ?: current.selectedIncidentTypeId
+                        ?: current.incidentTypeOptions.firstOrNull()?.id
                 } else {
-                    current.selectedType
+                    current.selectedIncidentTypeId
                 },
                 selectedSeverity = if (shouldUpdateSeverity) {
                     analysis.detectedSeverity ?: current.selectedSeverity
@@ -575,7 +648,7 @@ class IncidentViewModel(
         return IncidentOcrAnalysisResult(
             detectedStudent = studentMatch?.student,
             suggestedStudentName = studentMatch?.student?.fullName ?: studentHint ?: extractLikelyStudentName(lines),
-            detectedType = detectIncidentType(rawText, lines),
+            detectedTypeId = detectIncidentTypeId(rawText, lines, _uiState.value.incidentTypeOptions),
             detectedSeverity = detectSeverity(rawText, lines),
             suggestedDescription = suggestedDescription,
             confidence = studentMatch?.score
@@ -637,43 +710,38 @@ class IncidentViewModel(
                 words.size in 2..5 && line.any(Char::isLetter)
             }
 
-    private fun detectIncidentType(rawText: String, lines: List<String>): IncidentType {
+    private fun detectIncidentTypeId(
+        rawText: String,
+        lines: List<String>,
+        options: List<CatalogOption>
+    ): Long? {
+        if (options.isEmpty()) return null
         val explicitType = extractFieldValue(lines, "tipo")
-        mapIncidentType(explicitType)?.let { return it }
-
+        if (!explicitType.isNullOrBlank()) {
+            val normalizedExplicit = normalizeText(explicitType)
+            options.firstOrNull { option ->
+                val label = normalizeText(option.label)
+                label.contains(normalizedExplicit) || normalizedExplicit.contains(label)
+            }?.let { return it.id }
+        }
         val normalizedText = normalizeText(rawText)
-        val scores = mapOf(
-            IncidentType.BEHAVIOR to countKeywordMatches(
-                normalizedText,
-                "conducta",
-                "comportamiento",
-                "indisciplina",
-                "pelea",
-                "respeto"
-            ),
-            IncidentType.ACADEMIC to countKeywordMatches(
-                normalizedText,
-                "nota",
-                "rendimiento",
-                "tarea",
-                "deber",
-                "evaluacion",
-                "academico"
-            ),
-            IncidentType.HEALTH to countKeywordMatches(
-                normalizedText,
-                "dolor",
-                "enfermo",
-                "salud",
-                "accidente",
-                "malestar"
-            )
+        val keywordToMatcher: List<Pair<List<String>, (String) -> Boolean>> = listOf(
+            listOf("conducta", "comportamiento", "indisciplina", "pelea") to { label ->
+                label.contains("conduct") || label.contains("comport") || label.contains("disciplin")
+            },
+            listOf("academ", "nota", "tarea", "evaluacion") to { label ->
+                label.contains("academ") || label.contains("nota")
+            },
+            listOf("salud", "dolor", "enfermo", "accidente") to { label ->
+                label.contains("salud") || label.contains("medic")
+            }
         )
-
-        return scores.maxByOrNull { it.value }
-            ?.takeIf { it.value > 0 }
-            ?.key
-            ?: IncidentType.OTHER
+        keywordToMatcher.forEach { (keywords, matcher) ->
+            if (countKeywordMatches(normalizedText, *keywords.toTypedArray()) > 0) {
+                options.firstOrNull { matcher(normalizeText(it.label)) }?.let { return it.id }
+            }
+        }
+        return options.firstOrNull()?.id
     }
 
     private fun detectSeverity(rawText: String, lines: List<String>): IncidentSeverity? {
@@ -823,7 +891,7 @@ private data class StudentLineMatch(
 private data class IncidentOcrAnalysisResult(
     val detectedStudent: Student?,
     val suggestedStudentName: String?,
-    val detectedType: IncidentType?,
+    val detectedTypeId: Long?,
     val detectedSeverity: IncidentSeverity?,
     val suggestedDescription: String,
     val confidence: Double?

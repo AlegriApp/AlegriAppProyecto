@@ -2,16 +2,19 @@ package com.example.myapplication.presentation.incidents
 
 import com.example.myapplication.domain.model.Incident
 import com.example.myapplication.domain.model.IncidentSeverity
-import com.example.myapplication.domain.model.IncidentType
+import com.example.myapplication.presentation.common.CatalogOption
 import com.example.myapplication.domain.model.Student
 
 data class IncidentUiState(
     val screenTitle: String = "Reporte de Incidentes",
     val screenDescription: String = "Envio directo a autoridades y representantes via Telegram",
     val students: List<Student> = emptyList(),
+    val courseOptions: List<CatalogOption> = emptyList(),
+    val selectedCourseId: Long? = null,
+    val incidentTypeOptions: List<CatalogOption> = emptyList(),
     val incidents: List<IncidentHistoryItem> = emptyList(),
     val selectedStudentId: Long? = null,
-    val selectedType: IncidentType? = null,
+    val selectedIncidentTypeId: Long? = null,
     val selectedSeverity: IncidentSeverity = IncidentSeverity.MEDIUM,
     val description: String = "",
     val lastSavedIncidentId: Long? = null,

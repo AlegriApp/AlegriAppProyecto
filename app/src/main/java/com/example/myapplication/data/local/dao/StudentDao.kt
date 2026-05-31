@@ -13,6 +13,14 @@ interface StudentDao {
     @Query("SELECT * FROM students WHERE is_deleted = 0 ORDER BY fullName ASC")
     fun observeStudents(): Flow<List<StudentEntity>>
 
+    @Query(
+        "SELECT s.* FROM students s " +
+            "INNER JOIN student_courses sc ON sc.student_id = s.id " +
+            "WHERE sc.course_id = :courseId AND s.is_deleted = 0 " +
+            "ORDER BY s.fullName ASC"
+    )
+    fun observeStudentsByCourse(courseId: Long): Flow<List<StudentEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrReplaceStudents(students: List<StudentEntity>)
 
@@ -24,6 +32,9 @@ interface StudentDao {
 
     @Query("SELECT COUNT(*) FROM students WHERE is_deleted = 0")
     suspend fun countStudents(): Int
+
+    @Query("SELECT * FROM students WHERE is_deleted = 0")
+    suspend fun getAllActiveStudents(): List<StudentEntity>
 
     // ---------- Cola de sincronización ----------
 

@@ -19,28 +19,8 @@ import java.time.Instant
 // PULL: Supabase → Room
 // ---------------------------------------------------------------------------
 
-fun EstudianteRemoteDto.toStudentEntity(): StudentEntity {
-    val activeEnrollment = estudianteCurso
-        ?.firstOrNull { it.estado == "activo" }
-        ?: estudianteCurso?.firstOrNull()
-
-    val nivel = activeEnrollment?.cursos?.nivelAcademico?.nombre?.trim().orEmpty()
-    val paralelo = activeEnrollment?.cursos?.paralelo?.trim().orEmpty()
-
-    return StudentEntity(
-        id = id,
-        fullName = listOf(nombre, apellido).joinToString(" ").trim(),
-        grade = nivel.ifBlank { "Sin nivel" },
-        section = paralelo.ifBlank { "?" },
-        representativeName = "",
-        telegramChatId = null,
-        uuid = uuid ?: newUuid(),
-        remoteId = id,
-        syncStatus = SyncState.Stored.SUCCESS,
-        serverUpdatedAt = updatedAt?.toEpochMillisOrNull(),
-        isDeleted = deletedAt != null
-    )
-}
+/** @see [toSyncBundle] para matrícula, representantes y Telegram. */
+fun EstudianteRemoteDto.toStudentEntity(): StudentEntity = toSyncBundle().student
 
 /**
  * Convierte un incidente remoto a entidad local. **PULL only.**
@@ -93,11 +73,14 @@ fun mapSeverityLocalToRemote(local: String): String = when (local.uppercase()) {
 // PUSH: Room → Supabase
 // ---------------------------------------------------------------------------
 
-fun AttendanceEntity.toAsistenciaInsertDto(defaultCourseId: Long): AsistenciaInsertDto = AsistenciaInsertDto(
+fun AttendanceEntity.toAsistenciaInsertDto(
+    defaultCourseId: Long,
+    defaultMateriaId: Long? = null
+): AsistenciaInsertDto = AsistenciaInsertDto(
     uuid = uuid,
     estudianteId = studentId,
     cursoId = courseId ?: defaultCourseId,
-    materiaId = subjectId,
+    materiaId = subjectId ?: defaultMateriaId,
     fecha = date,
     horaEntrada = entryTime,
     estado = status.toRemoteAttendanceStatus(),
@@ -121,7 +104,7 @@ fun IncidentEntity.toIncidenteInsertDto(
 ): IncidenteInsertDto = IncidenteInsertDto(
     uuid = uuid,
     estudianteId = studentId,
-    tipoIncidenteId = mapIncidentTypeLocalToRemoteId(type, defaultTipoIncidenteId),
+    tipoIncidenteId = resolveTipoIncidenteId(type, defaultTipoIncidenteId),
     descripcion = description,
     fechaHora = dateTime,
     nivelGravedad = mapSeverityLocalToRemote(severity),
@@ -130,7 +113,11 @@ fun IncidentEntity.toIncidenteInsertDto(
     reportadoPorId = defaultReportadoPorId
 )
 
-/** Inverso de [mapTipoIncidenteRemote] en SyncRepositoryImpl. */
+/** Resuelve id remoto desde catálogo (string numérico) o enum legacy. */
+fun resolveTipoIncidenteId(localType: String, fallback: Long): Long =
+    localType.toLongOrNull() ?: mapIncidentTypeLocalToRemoteId(localType, fallback)
+
+/** Inverso de enum legacy; nuevos incidentes usan id de catálogo como string. */
 fun mapIncidentTypeLocalToRemoteId(localTypeName: String, fallback: Long): Long =
     when (runCatching { IncidentType.valueOf(localTypeName) }.getOrNull()) {
         IncidentType.BEHAVIOR -> 1L

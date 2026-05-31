@@ -70,7 +70,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.core.di.AppModule
 import com.example.myapplication.domain.model.Incident
 import com.example.myapplication.domain.model.IncidentSeverity
-import com.example.myapplication.domain.model.IncidentType
+import com.example.myapplication.presentation.common.CatalogDropdown
+import com.example.myapplication.presentation.common.CatalogOption
 import com.example.myapplication.domain.model.Student
 import com.example.myapplication.ui.theme.AlegriWarning
 import com.example.myapplication.ui.theme.MyApplicationTheme
@@ -92,14 +93,16 @@ fun IncidentScreenRoute(
     val context = LocalContext.current
     val viewModel = remember(context) {
         IncidentViewModel(
-            getStudentsUseCase = AppModule.provideGetStudentsUseCase(context),
+            getStudentsByCourseUseCase = AppModule.provideGetStudentsByCourseUseCase(context),
+            catalogRepository = AppModule.provideCatalogRepository(context),
             saveIncidentUseCase = AppModule.provideSaveIncidentUseCase(context),
             sendIncidentReportUseCase = AppModule.provideSendIncidentReportUseCase(context),
             incidentRepository = AppModule.provideIncidentRepository(context),
             studentRepository = AppModule.provideStudentRepository(context),
             recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context),
             networkMonitor = AppModule.provideNetworkMonitor(context),
-            syncPreferences = AppModule.provideSyncPreferences(context)
+            syncPreferences = AppModule.provideSyncPreferences(context),
+            syncRepository = AppModule.provideSyncRepository(context)
         )
     }
     IncidentScreenContent(
@@ -201,7 +204,10 @@ private fun IncidentScreenContent(
                         }
 
                         if (uiState.students.isEmpty() && !uiState.isLoadingStudents) {
-                            EmptyStudentsMessage(onRetry = { onEvent(IncidentEvent.LoadStudents) })
+                            EmptyStudentsMessage(
+                                syncHint = uiState.successMessage ?: uiState.errorMessage,
+                                onRetry = { onEvent(IncidentEvent.LoadStudents) }
+                            )
                         }
 
                         IncidentFormCard(
@@ -258,7 +264,7 @@ private fun IncidentScreenContent(
 }
 
 @Composable
-private fun EmptyStudentsMessage(onRetry: () -> Unit) {
+private fun EmptyStudentsMessage(syncHint: String?, onRetry: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
         shape = RoundedCornerShape(8.dp)
@@ -268,10 +274,17 @@ private fun EmptyStudentsMessage(onRetry: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                text = "No hay estudiantes disponibles. Sincroniza o carga estudiantes antes de registrar incidentes.",
+                text = "No hay estudiantes en este curso. Pulsa Reintentar para sincronizar matrículas desde Supabase.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
+            if (!syncHint.isNullOrBlank()) {
+                Text(
+                    text = syncHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
             OutlinedButton(onClick = onRetry) {
                 Text("Reintentar")
             }
@@ -461,12 +474,20 @@ private fun IncidentFormCard(
                 uiState.manualStudentError?.let { ErrorText(it) }
             }
 
+            IncidentFormSectionTitle("Curso")
+            CatalogDropdown(
+                label = "Curso",
+                options = uiState.courseOptions,
+                selectedId = uiState.selectedCourseId,
+                onSelected = { onEvent(IncidentEvent.CourseSelected(it)) }
+            )
+
             IncidentFormSectionTitle("Tipo de incidente")
             IncidentOptionGrid(
-                options = IncidentType.entries,
-                selected = uiState.selectedType,
+                options = uiState.incidentTypeOptions,
+                selected = uiState.incidentTypeOptions.firstOrNull { it.id == uiState.selectedIncidentTypeId },
                 label = { it.label },
-                onSelected = { onEvent(IncidentEvent.TypeSelected(it)) }
+                onSelected = { onEvent(IncidentEvent.TypeSelected(it.id)) }
             )
             uiState.typeError?.let { ErrorText(it) }
 
@@ -729,7 +750,7 @@ private fun IncidentHistoryCard(
                 )
             }
             Text(
-                text = "${item.incident.type.label} - ${item.incident.severity.label}",
+                text = "${item.incident.type} - ${item.incident.severity.label}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -801,14 +822,17 @@ private fun IncidentScreenPreview() {
                     Student(2L, "Juan Perez", "7mo", "A", "Representante")
                 ),
                 selectedStudentId = 1L,
-                selectedType = IncidentType.BEHAVIOR,
+                selectedIncidentTypeId = 1L,
+                incidentTypeOptions = listOf(CatalogOption(1L, "Conducta")),
+                courseOptions = listOf(CatalogOption(1L, "7mo A")),
+                selectedCourseId = 1L,
                 description = "Descripcion preliminar del incidente para vista previa.",
                 incidents = listOf(
                     IncidentHistoryItem(
                         incident = Incident(
                             id = 1L,
                             studentId = 1L,
-                            type = IncidentType.BEHAVIOR,
+                            type = "1",
                             severity = IncidentSeverity.MEDIUM,
                             description = "Incidente de prueba",
                             dateTime = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)

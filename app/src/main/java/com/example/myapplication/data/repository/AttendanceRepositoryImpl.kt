@@ -17,10 +17,36 @@ class AttendanceRepositoryImpl(
 ) : AttendanceRepository {
 
     override fun observeAttendanceByDate(date: String): Flow<List<StudentAttendanceRecord>> =
-        combine(
-            studentDao.observeStudents(),
-            attendanceDao.observeAttendanceByDate(date)
-        ) { students, attendance ->
+        buildAttendanceFlow(date, courseId = null, subjectId = null)
+
+    override fun observeAttendanceByDateAndCourse(
+        date: String,
+        courseId: Long
+    ): Flow<List<StudentAttendanceRecord>> = buildAttendanceFlow(date, courseId = courseId, subjectId = null)
+
+    override fun observeAttendanceByDateCourseAndSubject(
+        date: String,
+        courseId: Long,
+        subjectId: Long
+    ): Flow<List<StudentAttendanceRecord>> =
+        buildAttendanceFlow(date, courseId = courseId, subjectId = subjectId)
+
+    private fun buildAttendanceFlow(
+        date: String,
+        courseId: Long?,
+        subjectId: Long?
+    ): Flow<List<StudentAttendanceRecord>> {
+        val studentsFlow = if (courseId != null) {
+            studentDao.observeStudentsByCourse(courseId)
+        } else {
+            studentDao.observeStudents()
+        }
+        val attendanceFlow = when {
+            courseId != null && subjectId != null ->
+                attendanceDao.observeAttendanceByDateCourseSubject(date, courseId, subjectId)
+            else -> attendanceDao.observeAttendanceByDate(date)
+        }
+        return combine(studentsFlow, attendanceFlow) { students, attendance ->
             val attendanceByStudent = attendance.associateBy { it.studentId }
             students.map { student ->
                 StudentAttendanceRecord(
@@ -29,12 +55,24 @@ class AttendanceRepositoryImpl(
                 )
             }
         }
+    }
 
     override suspend fun upsertAttendance(attendance: Attendance) {
         require(attendance.status != AttendanceStatus.UNMARKED) {
             "No se puede persistir asistencia sin marcar"
         }
-        val existing = attendanceDao.getByStudentAndDate(attendance.studentId, attendance.date)
+        val courseId = attendance.courseId
+        val subjectId = attendance.subjectId
+        val existing = if (courseId != null && subjectId != null) {
+            attendanceDao.getByStudentDateCourseSubject(
+                studentId = attendance.studentId,
+                date = attendance.date,
+                courseId = courseId,
+                subjectId = subjectId
+            )
+        } else {
+            attendanceDao.getByStudentAndDate(attendance.studentId, attendance.date)
+        }
         // markPending = true → arranca como SyncState.IDLE (a sincronizar).
         attendanceDao.insertOrReplaceAttendance(
             attendance.toEntity(existing = existing, markPending = true)

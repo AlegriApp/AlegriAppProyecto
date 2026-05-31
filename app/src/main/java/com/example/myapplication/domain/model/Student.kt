@@ -7,5 +7,6 @@ data class Student(
     val section: String,
     val representativeName: String,
     val telegramChatId: String? = null,
+    val representativeId: Long? = null,
     val aliases: List<String> = emptyList()
 )

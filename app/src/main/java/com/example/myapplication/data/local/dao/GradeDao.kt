@@ -30,6 +30,19 @@ interface GradeDao {
 
     @Query(
         "SELECT * FROM calificaciones " +
+            "WHERE curso_id = :courseId AND materia_id = :subjectId " +
+            "AND tipo_evaluacion_id = :evaluationTypeId AND periodo_academico_id = :periodId " +
+            "AND is_deleted = 0 ORDER BY id DESC"
+    )
+    fun observeGradesByCatalogFilters(
+        courseId: Long,
+        subjectId: Long,
+        evaluationTypeId: Long,
+        periodId: Long
+    ): Flow<List<GradeEntity>>
+
+    @Query(
+        "SELECT * FROM calificaciones " +
             "WHERE estudiante_id = :studentId AND materia_nombre = :subject " +
             "AND periodo_nombre = :period AND descripcion = :description AND is_deleted = 0 " +
             "LIMIT 1"
@@ -38,6 +51,20 @@ interface GradeDao {
         studentId: Long,
         subject: String,
         period: String,
+        description: String
+    ): GradeEntity?
+
+    @Query(
+        "SELECT * FROM calificaciones " +
+            "WHERE estudiante_id = :studentId AND materia_id = :subjectId " +
+            "AND periodo_academico_id = :periodId AND tipo_evaluacion_id = :evaluationTypeId " +
+            "AND descripcion = :description AND is_deleted = 0 LIMIT 1"
+    )
+    suspend fun getByStudentCatalogAndDescription(
+        studentId: Long,
+        subjectId: Long,
+        periodId: Long,
+        evaluationTypeId: Long,
         description: String
     ): GradeEntity?
 

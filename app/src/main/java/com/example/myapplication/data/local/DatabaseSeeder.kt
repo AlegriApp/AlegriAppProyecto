@@ -1,8 +1,13 @@
 package com.example.myapplication.data.local
 
 import com.example.myapplication.core.common.newUuid
+import com.example.myapplication.data.local.entity.CursoCatalogEntity
 import com.example.myapplication.data.local.entity.GradeEntity
+import com.example.myapplication.data.local.entity.MateriaCatalogEntity
+import com.example.myapplication.data.local.entity.PeriodoAcademicoCatalogEntity
 import com.example.myapplication.data.local.entity.StudentEntity
+import com.example.myapplication.data.local.entity.TipoEvaluacionCatalogEntity
+import com.example.myapplication.data.local.entity.TipoIncidenteCatalogEntity
 import com.example.myapplication.domain.model.sync.SyncState
 
 /**
@@ -46,6 +51,50 @@ object DatabaseSeeder {
         if (gradeDao.countGrades() == 0) {
             gradeDao.insertOrReplaceGrades(buildDemoGrades())
         }
+
+        seedCatalogsIfEmpty(database)
+    }
+
+    private suspend fun seedCatalogsIfEmpty(database: AppDatabase) {
+        val catalogDao = database.catalogDao()
+        if (catalogDao.countCursos() > 0) return
+
+        val demoCourseId = 1L
+        catalogDao.replaceCursos(
+            listOf(
+                CursoCatalogEntity(
+                    id = demoCourseId,
+                    nombre = "5to Grado",
+                    paralelo = "A",
+                    anioLectivo = "2025-2026"
+                )
+            )
+        )
+        catalogDao.replaceMaterias(
+            listOf(
+                MateriaCatalogEntity(id = 1L, nombre = "General", cursoId = demoCourseId)
+            )
+        )
+        catalogDao.replaceTiposEvaluacion(
+            listOf(
+                TipoEvaluacionCatalogEntity(id = 6L, nombre = "Parcial"),
+                TipoEvaluacionCatalogEntity(id = 7L, nombre = "Formativa")
+            )
+        )
+        catalogDao.replacePeriodos(
+            listOf(
+                PeriodoAcademicoCatalogEntity(id = 1L, nombre = "Periodo actual", anioLectivo = "2025-2026")
+            )
+        )
+        catalogDao.replaceTiposIncidente(
+            listOf(
+                TipoIncidenteCatalogEntity(id = 1L, nombre = "Conducta"),
+                TipoIncidenteCatalogEntity(id = 2L, nombre = "Académico"),
+                TipoIncidenteCatalogEntity(id = 4L, nombre = "Salud")
+            )
+        )
+        val studentDao = database.studentDao()
+        // Sin matrículas demo: al sincronizar se cargan desde estudiante_curso en Supabase.
     }
 
     private fun buildDemoGrades(): List<GradeEntity> {

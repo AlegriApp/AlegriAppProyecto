@@ -4,8 +4,10 @@ import android.net.Uri
 
 sealed interface GradesEvent {
     data object LoadData : GradesEvent
-    data class SubjectSelected(val subject: String) : GradesEvent
-    data class PeriodSelected(val period: String) : GradesEvent
+    data class CourseSelected(val courseId: Long) : GradesEvent
+    data class SubjectSelected(val subjectId: Long) : GradesEvent
+    data class EvaluationTypeSelected(val evaluationTypeId: Long) : GradesEvent
+    data class PeriodSelected(val periodId: Long) : GradesEvent
     data class EditGrade(
         val studentId: Long,
         val activityName: String,

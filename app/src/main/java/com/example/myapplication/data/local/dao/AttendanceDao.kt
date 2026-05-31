@@ -21,6 +21,30 @@ interface AttendanceDao {
 
     @Query(
         "SELECT * FROM asistencias " +
+            "WHERE fecha = :date AND curso_id = :courseId AND materia_id = :subjectId " +
+            "AND is_deleted = 0 ORDER BY estudiante_id ASC"
+    )
+    fun observeAttendanceByDateCourseSubject(
+        date: String,
+        courseId: Long,
+        subjectId: Long
+    ): Flow<List<AttendanceEntity>>
+
+    @Query(
+        "SELECT * FROM asistencias " +
+            "WHERE estudiante_id = :studentId AND fecha = :date " +
+            "AND curso_id = :courseId AND materia_id = :subjectId AND is_deleted = 0 " +
+            "LIMIT 1"
+    )
+    suspend fun getByStudentDateCourseSubject(
+        studentId: Long,
+        date: String,
+        courseId: Long,
+        subjectId: Long
+    ): AttendanceEntity?
+
+    @Query(
+        "SELECT * FROM asistencias " +
             "WHERE estudiante_id = :studentId AND fecha = :date AND is_deleted = 0 " +
             "LIMIT 1"
     )

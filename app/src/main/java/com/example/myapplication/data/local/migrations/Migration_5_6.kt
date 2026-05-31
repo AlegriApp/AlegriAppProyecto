@@ -38,28 +38,53 @@ val Migration_5_6 = object : Migration(5, 6) {
     )
 
     override fun migrate(db: SupportSQLiteDatabase) {
-        syncTables.forEach { table ->
+        val tablesToMigrate = syncTables.filter { tableExists(db, it) }
+
+        tablesToMigrate.forEach { table ->
             addOfflineFirstColumns(db, table)
         }
 
-        // `incidentes` necesita además `local_only` para PULL-only correctness.
-        db.execSQL("ALTER TABLE incidentes ADD COLUMN local_only INTEGER NOT NULL DEFAULT 1")
+        // `incidentes` necesita además `local_only` (solo si la tabla ya existía en v5).
+        if (tableExists(db, "incidentes") && !tableHasColumn(db, "incidentes", "local_only")) {
+            db.execSQL("ALTER TABLE incidentes ADD COLUMN local_only INTEGER NOT NULL DEFAULT 1")
+        }
 
-        syncTables.forEach { table ->
+        tablesToMigrate.forEach { table ->
             backfillSyncStatus(db, table)
             backfillUuids(db, table)
             createOfflineFirstIndexes(db, table)
         }
     }
 
+    private fun tableExists(db: SupportSQLiteDatabase, table: String): Boolean {
+        db.query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            arrayOf(table)
+        ).use { return it.moveToFirst() }
+    }
+
     private fun addOfflineFirstColumns(db: SupportSQLiteDatabase, table: String) {
-        db.execSQL("ALTER TABLE $table ADD COLUMN uuid TEXT NOT NULL DEFAULT ''")
-        db.execSQL("ALTER TABLE $table ADD COLUMN remote_id INTEGER")
-        db.execSQL("ALTER TABLE $table ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'IDLE'")
-        db.execSQL("ALTER TABLE $table ADD COLUMN sync_error TEXT")
-        db.execSQL("ALTER TABLE $table ADD COLUMN last_sync_attempt INTEGER")
-        db.execSQL("ALTER TABLE $table ADD COLUMN server_updated_at INTEGER")
-        db.execSQL("ALTER TABLE $table ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
+        if (!tableHasColumn(db, table, "uuid")) {
+            db.execSQL("ALTER TABLE $table ADD COLUMN uuid TEXT NOT NULL DEFAULT ''")
+        }
+        if (!tableHasColumn(db, table, "remote_id")) {
+            db.execSQL("ALTER TABLE $table ADD COLUMN remote_id INTEGER")
+        }
+        if (!tableHasColumn(db, table, "sync_status")) {
+            db.execSQL("ALTER TABLE $table ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'IDLE'")
+        }
+        if (!tableHasColumn(db, table, "sync_error")) {
+            db.execSQL("ALTER TABLE $table ADD COLUMN sync_error TEXT")
+        }
+        if (!tableHasColumn(db, table, "last_sync_attempt")) {
+            db.execSQL("ALTER TABLE $table ADD COLUMN last_sync_attempt INTEGER")
+        }
+        if (!tableHasColumn(db, table, "server_updated_at")) {
+            db.execSQL("ALTER TABLE $table ADD COLUMN server_updated_at INTEGER")
+        }
+        if (!tableHasColumn(db, table, "is_deleted")) {
+            db.execSQL("ALTER TABLE $table ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
+        }
     }
 
     private fun backfillSyncStatus(db: SupportSQLiteDatabase, table: String) {

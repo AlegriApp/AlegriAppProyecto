@@ -5,6 +5,8 @@ import com.example.myapplication.domain.model.AttendanceStatus
 
 sealed interface AttendanceEvent {
     data object LoadStudents : AttendanceEvent
+    data class CourseSelected(val courseId: Long) : AttendanceEvent
+    data class SubjectSelected(val subjectId: Long) : AttendanceEvent
     data class ChangeDate(val selectedDate: String) : AttendanceEvent
     data class MarkPresent(val studentId: Long) : AttendanceEvent
     data class MarkLate(val studentId: Long) : AttendanceEvent
