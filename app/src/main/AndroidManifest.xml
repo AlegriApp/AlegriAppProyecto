@@ -9,6 +9,11 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- Offline First: notificaciones del sistema al sincronizar -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -31,6 +36,18 @@
             </intent-filter>
 
         </activity>
+
+        <!--
+             Offline First (Fase 13): hacer que el SystemForegroundService de
+             WorkManager declare foregroundServiceType="dataSync".
+             Necesario en Android 14+ (API 34+) para que setForeground(...) con
+             FOREGROUND_SERVICE_TYPE_DATA_SYNC no lance IllegalArgumentException
+             "0x00000001 is not a subset of foregroundServiceType attribute 0x00000000".
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
 
     </application>
 

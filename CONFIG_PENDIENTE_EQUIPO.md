@@ -88,23 +88,24 @@ Falta:
 - Persistencia local en Room funciona.
 - Envio por Telegram funciona vía `SendIncidentReportUseCase`.
 
-**Decisión del equipo (Offline First — Fase 0):**
+**Decisión del equipo (Offline First — Fase 14, 6ª iteración):**
 
-- **Mobile NO implementa POST de incidentes a Supabase.**
-- **Mobile solo hace PULL** de incidentes desde la tabla `incidentes` (lectura).
-- Los incidentes que aparecen en Supabase son insertados por un **proceso externo a la app móvil**.
+> ⚠️ **REVERTIDO:** la decisión anterior (Fase 0) de "PULL only" fue revertida.
+> Mobile ahora **SÍ envía** incidentes a Supabase **además** de Telegram.
 
-**Proceso externo que inserta hoy en `incidentes`** *(pendiente de confirmación documental)*:
-- [ ] Inserción manual desde Supabase SQL Editor / dashboard.
-- [ ] Panel administrativo web.
-- [ ] Webhook del bot de Telegram que escribe directo a Postgres.
-- [ ] Script externo (Python / Node / otro).
-- [ ] Otra app cliente.
+- ✅ **Mobile envía POST** de incidentes a Supabase (`upsertIncidente` por `uuid`).
+- ✅ **Mobile hace PULL** de incidentes desde Supabase (sin cambio).
+- ✅ **Mobile envía por Telegram** los incidentes con `enviado=0` (Fase 13).
 
-> Identificar la opción correcta y marcarla. Aplica solo como documentación del flujo; no condiciona el alcance mobile (PULL only).
+**Limitación conocida:** si un incidente referencia un estudiante creado offline
+(id local negativo), el push a Supabase se omite y queda como `sync_status=ERROR`
+con mensaje "Estudiante local sin sincronizar...". Hay que asociar el incidente
+a un estudiante que ya esté en el catálogo remoto.
 
-**SQL relacionado generado:**
-- `supabase_grant_select_incidentes.sql` — habilita PULL SELECT para `anon, authenticated` con `RLS USING (deleted_at IS NULL)`. **NO crea política de INSERT** intencionalmente.
+**SQL relacionado:**
+- `supabase_grant_select_incidentes.sql` — PULL SELECT (sin cambio).
+- `supabase_grant_insert_incidentes.sql` (**nuevo Fase 14**) — habilita INSERT/UPDATE
+  con `RLS WITH CHECK (true)` para `anon, authenticated`.
 
 ## 8. Offline First — matriz entidad × operación × estrategia de sync
 
@@ -113,7 +114,7 @@ Falta:
 | `estudiantes` | ✅ (UUID local) | ✅ | Soft (`is_deleted=1`) | ✅ upsert por `uuid` | ✅ incremental por `updated_at` | Mobile puede crear offline para flujo de incidente con estudiante nuevo |
 | `asistencias` | ✅ (UUID local) | ✅ | Soft | ✅ upsert por `uuid` | ✅ incremental | Clave natural UNIQUE en Postgres: `(estudiante, curso, fecha, materia)` |
 | `calificaciones` | ✅ (UUID local) | ✅ | Soft | ✅ upsert por `uuid` | ✅ incremental | Sin UNIQUE natural en Postgres → `uuid` resuelve idempotencia |
-| `incidentes` | ❌ no se crean para Supabase | ❌ | ❌ | ❌ **NUNCA** | ✅ incremental por `updated_at` | **PULL only.** Mobile sí mantiene incidentes locales para envío Telegram, pero esos no se suben |
+| `incidentes` | ✅ (UUID local) | ✅ | Soft | ✅ upsert por `uuid` (Fase 14) | ✅ incremental por `updated_at` | **Bloqueo defensivo:** push omite incidentes con `studentId<=0` (estudiante local sin remote_id) |
 | `tipos_incidente`, `tipos_evaluacion`, `niveles_academicos`, `periodos_academicos`, `cursos`, `materias` | ❌ | ❌ | ❌ | ❌ | ✅ pull periódico (catálogos) | Solo lectura desde mobile |
 | `evidencias` (futuro) | ✅ (uuid + ruta_local) | ✅ | Soft | ✅ subir blob + actualizar `url_remota` | ✅ | Patrón nativo del esquema (`ruta_local` + `url_remota`) |
 | `notificaciones`, `reportes`, `auditoria`, `sincronizacion_pendiente` (server-side) | ❌ | ❌ | ❌ | ❌ | ❌ | Server-side puro, mobile no toca |
@@ -137,7 +138,8 @@ Falta:
 |---------|----------------|-------|
 | `supabase_fix_insert_rls.sql` (preexistente) | Ya aplicado | Habilita INSERT en `asistencias` y `calificaciones` |
 | `supabase_add_uuid_columns.sql` (nuevo, Fase 4) | Antes de Fase 4 | Añade columna `uuid UUID UNIQUE DEFAULT gen_random_uuid()` a `estudiantes`, `asistencias`, `calificaciones`, `incidentes`. Compatible con Postgres 11+. **No reescribe la tabla.** |
-| `supabase_grant_select_incidentes.sql` (nuevo, Fase 4) | Antes de Fase 4 | Habilita PULL de `incidentes` y `tipos_incidente`. **Intencionalmente NO crea política de INSERT** |
+| `supabase_grant_select_incidentes.sql` (nuevo, Fase 4) | Antes de Fase 4 | Habilita PULL de `incidentes` y `tipos_incidente`. |
+| `supabase_grant_insert_incidentes.sql` (**nuevo, Fase 14**) | Antes de usar push de incidentes desde mobile | Añade `GRANT INSERT/UPDATE` + policies `mobile_insert_incidentes` y `mobile_update_incidentes` |
 
 **Verificación post-aplicación:**
 
@@ -169,7 +171,9 @@ FROM asistencias;
 - [ ] Confirmar que no se suben secretos a git.
 - [ ] Aplicar `supabase_add_uuid_columns.sql` antes de Fase 4.
 - [ ] Aplicar `supabase_grant_select_incidentes.sql` antes de Fase 4.
-- [ ] Confirmar matriz §8 (incidentes = PULL only).
+- [ ] **Aplicar `supabase_grant_insert_incidentes.sql` antes de Fase 14** (nuevo).
+- [ ] Confirmar matriz §8.
+- [ ] Ajustar en `local.properties` el `SUPABASE_DEFAULT_TIPO_INCIDENTE_ID` si el valor `1` no aplica al proyecto.
 
 ## 11. Recomendacion para repartir trabajo (equipo)
 

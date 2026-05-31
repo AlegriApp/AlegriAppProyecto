@@ -33,6 +33,7 @@ import com.example.myapplication.domain.usecase.grade.GetGradesBySubjectAndPerio
 import com.example.myapplication.domain.usecase.grade.SaveGradeUseCase
 import com.example.myapplication.domain.usecase.incidents.SaveIncidentUseCase
 import com.example.myapplication.domain.usecase.incidents.SendIncidentReportUseCase
+import com.example.myapplication.domain.usecase.incidents.SendPendingIncidentsUseCase
 import com.example.myapplication.domain.usecase.ocr.RecognizeTextFromImageUseCase
 import com.example.myapplication.domain.usecase.student.GetStudentsUseCase
 import com.example.myapplication.domain.usecase.telegram.SendTelegramMessageUseCase
@@ -157,6 +158,13 @@ object AppModule {
             sendTelegramMessageUseCase = provideSendTelegramMessageUseCase(),
             incidentRepository = provideIncidentRepository(context),
             defaultChatId = BuildConfig.TELEGRAM_DEFAULT_CHAT_ID
+        )
+
+    fun provideSendPendingIncidentsUseCase(context: Context): SendPendingIncidentsUseCase =
+        SendPendingIncidentsUseCase(
+            incidentRepository = provideIncidentRepository(context),
+            studentRepository = provideStudentRepository(context),
+            sendIncidentReportUseCase = provideSendIncidentReportUseCase(context)
         )
 
     fun provideOcrRepository(context: Context): OcrRepository =

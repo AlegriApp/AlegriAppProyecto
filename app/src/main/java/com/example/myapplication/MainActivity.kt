@@ -1,15 +1,48 @@
 package com.example.myapplication
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.example.myapplication.core.notifications.SyncNotifications
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Launcher para pedir POST_NOTIFICATIONS en Android 13+ (API 33).
+     * Si el usuario rechaza, las notificaciones de sincronización no se mostrarán
+     * pero el sync sigue funcionando — el helper [SyncNotifications] absorbe la
+     * SecurityException silenciosamente.
+     */
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Crear canal de notificación temprano (Android 8+).
+        SyncNotifications.ensureChannel(applicationContext)
+
+        // Pedir permiso de notificación si aún no se concedió (Android 13+).
+        ensureNotificationPermission()
+
         setContent {
             AlegriApp()
+        }
+    }
+
+    private fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 }

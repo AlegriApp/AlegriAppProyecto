@@ -11,6 +11,7 @@ import com.example.myapplication.data.mapper.toAsistenciaInsertDto
 import com.example.myapplication.data.mapper.toCalificacionInsertDto
 import com.example.myapplication.data.mapper.toEpochMillisOrNull
 import com.example.myapplication.data.mapper.toIncidentEntity
+import com.example.myapplication.data.mapper.toIncidenteInsertDto
 import com.example.myapplication.data.mapper.toStudentEntity
 import com.example.myapplication.data.remote.api.SupabaseApiService
 import com.example.myapplication.domain.model.IncidentType
@@ -24,12 +25,21 @@ import com.example.myapplication.domain.repository.SyncRepository
  *   - `estudiantes`         → PULL (catálogo). Sin push.
  *   - `asistencias`         → PUSH local→remoto vía upsert por `uuid`.
  *   - `calificaciones`      → PUSH local→remoto vía upsert por `uuid`.
- *   - `incidentes`          → **PULL ONLY** (decisión equipo Fase 0).
+ *   - `incidentes`          → **PULL + PUSH** (Fase 14 revirtió la decisión
+ *                             original de PULL only). Upsert idempotente por
+ *                             `uuid`. Excluye los que tienen `studentId<=0`
+ *                             (estudiante local sin sincronizar).
+ *
+ * **Telegram** (Fase 13) corre fuera de esta clase, en `SendPendingIncidentsUseCase`
+ * disparado desde `SyncWorker`. Es ortogonal a la sincronización con Supabase:
+ * cada canal tiene su propia columna de estado (`sync_status` para Supabase,
+ * `enviado` para Telegram) y reintenta independientemente.
  *
  * Resolución de conflictos (Fase 8):
  *   - LWW por `server_updated_at` (sólo para datos que vienen del servidor).
  *   - Local PENDING (sync_status IDLE/ERROR) gana frente a remoto.
- *   - Incidentes: nunca se sobrescriben con datos locales.
+ *   - Incidentes traídos del PULL no se sobrescriben con datos locales
+ *     diferentes (UUID distinto → entidades distintas).
  */
 class SyncRepositoryImpl(
     private val supabaseApi: SupabaseApiService?,
@@ -216,7 +226,43 @@ class SyncRepositoryImpl(
                 }
             }
 
-            // Incidentes intencionalmente OMITIDOS aquí: son PULL only.
+            // Incidentes (Fase 14 — el equipo revirtió la decisión PULL-only).
+            // Solo se envían los que tienen estudiante remoto válido (id positivo).
+            // Si el incidente referencia un estudiante creado offline (id < 0),
+            // se marca como ERROR explicando la razón hasta que se resuelva.
+            val pendingIncidents = incidentDao.getPendingPushToSupabase()
+            pendingIncidents.forEach { entity ->
+                if (entity.studentId <= 0L) {
+                    incidentDao.markPushFailed(
+                        uuid = entity.uuid,
+                        error = "Estudiante local (id ${entity.studentId}) sin " +
+                            "sincronizar a Supabase. Asocia el incidente a un " +
+                            "estudiante del listado oficial.",
+                        now = now
+                    )
+                    failed++
+                    return@forEach
+                }
+                incidentDao.markPushSending(entity.uuid, now)
+                runCatching {
+                    val response = api.upsertIncidente(
+                        body = entity.toIncidenteInsertDto(
+                            defaultTipoIncidenteId = BuildConfig.SUPABASE_DEFAULT_TIPO_INCIDENTE_ID,
+                            defaultReportadoPorId = BuildConfig.SUPABASE_DEFAULT_REPORTADO_POR_ID
+                                .takeIf { it > 0L }
+                        )
+                    ).firstOrNull()
+                    incidentDao.markPushSynced(
+                        uuid = entity.uuid,
+                        remoteId = response?.id,
+                        serverTs = response?.updatedAt?.toEpochMillisOrNull()
+                    )
+                    uploaded++
+                }.onFailure { error ->
+                    incidentDao.markPushFailed(entity.uuid, error.message.orEmpty(), now)
+                    failed++
+                }
+            }
 
             buildOutcome(uploaded, failed)
         }.getOrElse { error ->

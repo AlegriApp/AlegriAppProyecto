@@ -1,6 +1,10 @@
 -- =============================================================================
 -- FASE 4 — Habilitar PULL de incidentes desde mobile
--- Mobile solo lee incidentes; NO inserta. Otro proceso externo es quien escribe.
+-- =============================================================================
+-- NOTA (Fase 14): la decisión "PULL only" fue revertida. Mobile ahora también
+-- escribe incidentes. Para habilitar el push, aplicar TAMBIÉN:
+--   supabase_grant_insert_incidentes.sql
+-- Este archivo sigue siendo válido para la parte SELECT.
 -- =============================================================================
 -- Ejecutar en Supabase → SQL Editor → Run
 -- =============================================================================
