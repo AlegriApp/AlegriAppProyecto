@@ -1,7 +1,9 @@
 package com.example.myapplication.data.mapper
 
+import com.example.myapplication.core.common.newUuid
 import com.example.myapplication.data.local.entity.GradeEntity
 import com.example.myapplication.domain.model.Grade
+import com.example.myapplication.domain.model.sync.SyncState
 
 fun GradeEntity.toDomain(): Grade = Grade(
     id = id,
@@ -22,8 +24,11 @@ fun GradeEntity.toDomain(): Grade = Grade(
     syncPending = syncPending
 )
 
-fun Grade.toEntity(existingId: Long? = null): GradeEntity = GradeEntity(
-    id = existingId ?: id,
+fun Grade.toEntity(
+    existing: GradeEntity? = null,
+    markPending: Boolean = true
+): GradeEntity = GradeEntity(
+    id = existing?.id ?: id,
     studentId = studentId,
     subjectId = subjectId,
     courseId = courseId,
@@ -35,8 +40,16 @@ fun Grade.toEntity(existingId: Long? = null): GradeEntity = GradeEntity(
     observation = observation,
     teacherId = teacherId,
     state = state,
-    syncPending = syncPending,
+    syncPending = markPending,
     subjectName = subject,
     periodName = period,
-    evaluationTypeName = activityType
+    evaluationTypeName = activityType,
+    uuid = existing?.uuid ?: newUuid(),
+    remoteId = existing?.remoteId,
+    syncStatus = if (markPending) SyncState.Stored.IDLE else SyncState.Stored.SUCCESS,
+    syncError = if (markPending) null else existing?.syncError,
+    lastSyncAttempt = existing?.lastSyncAttempt,
+    serverUpdatedAt = existing?.serverUpdatedAt,
+    isDeleted = existing?.isDeleted ?: false
 )
+

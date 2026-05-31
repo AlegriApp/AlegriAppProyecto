@@ -23,6 +23,6 @@ class GradeRepositoryImpl(
             period = grade.period,
             description = grade.activityName
         )
-        gradeDao.insertOrReplaceGrade(grade.toEntity(existingId = existing?.id))
+        gradeDao.insertOrReplaceGrade(grade.toEntity(existing = existing, markPending = true))
     }
 }

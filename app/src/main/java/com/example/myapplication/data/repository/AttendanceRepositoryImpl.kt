@@ -35,8 +35,9 @@ class AttendanceRepositoryImpl(
             "No se puede persistir asistencia sin marcar"
         }
         val existing = attendanceDao.getByStudentAndDate(attendance.studentId, attendance.date)
+        // markPending = true → arranca como SyncState.IDLE (a sincronizar).
         attendanceDao.insertOrReplaceAttendance(
-            attendance.toEntity(existingId = existing?.id)
+            attendance.toEntity(existing = existing, markPending = true)
         )
     }
 }

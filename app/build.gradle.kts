@@ -83,6 +83,8 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(libs.google.mlkit.text.recognition)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.gson)
     implementation(libs.okhttp.logging)

@@ -3,6 +3,8 @@ package com.example.myapplication.presentation.incidents
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.myapplication.core.network.NetworkMonitor
+import com.example.myapplication.core.preferences.SyncPreferences
 import com.example.myapplication.domain.model.Incident
 import com.example.myapplication.domain.model.IncidentSeverity
 import com.example.myapplication.domain.model.IncidentType
@@ -31,7 +33,9 @@ class IncidentViewModel(
     private val sendIncidentReportUseCase: SendIncidentReportUseCase,
     private val incidentRepository: IncidentRepository,
     private val studentRepository: StudentRepository,
-    private val recognizeTextFromImageUseCase: RecognizeTextFromImageUseCase
+    private val recognizeTextFromImageUseCase: RecognizeTextFromImageUseCase,
+    private val networkMonitor: NetworkMonitor? = null,
+    private val syncPreferences: SyncPreferences? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(IncidentUiState())
@@ -39,6 +43,20 @@ class IncidentViewModel(
     private var observeJob: Job? = null
 
     init {
+        networkMonitor?.let { monitor ->
+            viewModelScope.launch {
+                monitor.isOnline.collect { online ->
+                    _uiState.update { it.copy(isOffline = !online) }
+                }
+            }
+        }
+        syncPreferences?.let { prefs ->
+            viewModelScope.launch {
+                prefs.lastSuccessfulSync.collect { ts ->
+                    _uiState.update { it.copy(lastSuccessfulSyncEpochMs = ts) }
+                }
+            }
+        }
         loadStudents()
     }
 
@@ -768,8 +786,26 @@ class IncidentViewModel(
             .replace("\\s+".toRegex(), " ")
             .trim()
 
-    private fun nextLocalStudentId(students: List<Student>): Long =
-        (students.maxOfOrNull { it.id } ?: 0L) + 1L
+    /**
+     * Genera un ID local **negativo** basado en timestamp para estudiantes
+     * creados manualmente offline. Los SERIAL de Postgres son siempre
+     * positivos, por lo que un ID negativo garantiza cero colisión.
+     *
+     * El identificador cross-system real es el `uuid` de [com.example.myapplication.data.local.entity.StudentEntity];
+     * este `id` Long es solo la PK interna de Room. Si más adelante el estudiante
+     * se sincronizara a Supabase, el `remote_id` guardaría el SERIAL del servidor
+     * y este ID local podría reemplazarse o seguir existiendo en paralelo.
+     */
+    private fun nextLocalStudentId(students: List<Student>): Long {
+        val candidate = -System.currentTimeMillis()
+        // Evita colisión improbable con otro registro creado en el mismo ms.
+        val takenIds = students.map { it.id }.toSet()
+        var id = candidate
+        while (id in takenIds) {
+            id -= 1L
+        }
+        return id
+    }
 
     companion object {
         private const val MIN_DESCRIPTION_LENGTH = 10
