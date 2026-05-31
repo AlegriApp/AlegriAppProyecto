@@ -250,46 +250,76 @@ Forzar otro sync (cerrar/abrir app). Repetir la query anterior.
 
 ---
 
-## PRUEBA 6 — Confirmación: mobile NO escribe incidentes
+## PRUEBA 6 — Push de incidentes a Supabase (Fase 14, decisión revertida)
+
+> **Cambio importante respecto a versiones anteriores:** el equipo decidió que
+> mobile SÍ debe enviar incidentes a Supabase. La prueba anterior ("mobile NO
+> escribe incidentes") ya **no aplica**.
+
+### Pre-requisito
+
+Aplicar `supabase_grant_insert_incidentes.sql` en Supabase SQL Editor (una vez).
 
 ### Pasos
 
 1. Activar modo avión.
-2. Ir a **Incidentes** → tocar **+ Registrar manualmente**.
-3. Crear un incidente nuevo con estudiante manual: "Juan Prueba PULL".
-4. Pulsar Guardar.
-5. Desactivar modo avión y esperar 60s al sync.
+2. Ir a **Incidentes** → seleccionar un estudiante **del listado oficial** (no manual).
+   Ej.: "María González Pérez" (id positivo).
+3. Crear incidente: tipo "Comportamiento", severidad "Media", descripción "Prueba POST Fase 14".
+4. Pulsar **Guardar**.
+5. Desactivar modo avión y esperar 30–60s.
 
 ### Verificar en Supabase
 
 ```sql
-SELECT * FROM incidentes
-WHERE descripcion LIKE '%[poner aquí la descripción que usaste]%'
+SELECT id, uuid, estudiante_id, tipo_incidente_id, descripcion, nivel_gravedad, estado
+FROM incidentes
+WHERE descripcion = 'Prueba POST Fase 14'
 ORDER BY created_at DESC LIMIT 5;
 ```
 
 ### Resultado esperado
 
-- ✅ **NO aparece ninguna fila** en Supabase. El incidente quedó solo local.
+- ✅ **Aparece 1 fila nueva** en Supabase con `uuid` igual al generado en mobile.
+- ✅ `nivel_gravedad = 'medio'` (traducción enum MEDIUM → 'medio').
+- ✅ `tipo_incidente_id = 1` (BEHAVIOR → 1).
+- ✅ `estado = 'abierto'` por defecto.
 
 ### Verificar en Database Inspector (mobile)
 
 ```sql
-SELECT uuid, descripcion, local_only, sync_status
+SELECT uuid, descripcion, sync_status, remote_id, local_only
 FROM incidentes
-WHERE descripcion LIKE '%[tu descripción]%';
+WHERE descripcion = 'Prueba POST Fase 14';
 ```
 
-- ✅ Existe localmente con `local_only = 1`.
+- ✅ `sync_status = 'SUCCESS'`.
+- ✅ `remote_id` poblado (el SERIAL que asignó Postgres).
+- ✅ `local_only = 0` (ya está en el servidor).
 
-### Verificación adicional (estática)
+### Caso defensivo: incidente con estudiante manual (id negativo)
 
-```bash
-cd app/src/main/java/com/example/myapplication
-grep -rn "insertIncidente\|upsertIncidente" .
+1. Modo avión ON.
+2. Crear incidente con **estudiante manual** (formulario manual): "Juan Local".
+3. Modo avión OFF, esperar sync.
+
+**Verificar:**
+
+```sql
+SELECT uuid, descripcion, sync_status, sync_error
+FROM incidentes
+WHERE descripcion LIKE '%[descripción del incidente de Juan]%';
 ```
 
-**Esperado:** 0 matches. Confirma que mobile no tiene método para escribir incidentes a Supabase.
+**Esperado:**
+- ✅ `sync_status = 'ERROR'`.
+- ✅ `sync_error` contiene "Estudiante local (id -...) sin sincronizar...".
+- ✅ El incidente **NO** llegó a Supabase (lo bloqueó el chequeo defensivo).
+- ✅ Si después asocias el incidente a un estudiante oficial, el siguiente sync lo enviará.
+
+### Idempotencia
+
+Editar el mismo incidente y guardar de nuevo. Verificar que en Supabase **no se duplica**: la misma fila se actualiza (UPSERT por `uuid`).
 
 ---
 
@@ -478,6 +508,258 @@ Análogo a Pruebas 2–3 pero en pantalla Calificaciones:
 
 ---
 
+## PRUEBA 14B — Auto-envío de incidentes pendientes + notificación del sistema (F13)
+
+> **Esta prueba valida el flujo completo de incidentes pendientes:**
+> al recuperar internet, los incidentes guardados sin enviar se mandan
+> automáticamente por Telegram, y el usuario ve **notificaciones del sistema
+> Android fuera de la app** mientras ocurre.
+
+### 14B.1 — Conceder permiso de notificaciones (Android 13+)
+
+1. Al abrir la app por primera vez tras instalar, Android 13+ muestra un diálogo
+   "Permitir notificaciones de AlegriAPP".
+2. Pulsar **Permitir**.
+
+**Si rechazaste el permiso:**
+- Ir a **Ajustes → Apps → AlegriAPP → Notificaciones** → activar.
+- O reinstalar la app para volver a ver el diálogo.
+
+> En Android 8–12 las notificaciones funcionan sin pedir permiso. Si tu test
+> device es Android < 13, salta este paso.
+
+### 14B.2 — Crear backlog de incidentes pendientes sin red
+
+1. Activar **modo avión** (o `adb shell svc wifi disable && adb shell svc data disable`).
+2. Abrir la app → pantalla **Incidentes**.
+3. Crear **3 incidentes seguidos**:
+   - Estudiante 1, tipo "Comportamiento", severidad "Media", descripción "Prueba envío auto 1".
+   - Estudiante 2, tipo "Académico", severidad "Baja", descripción "Prueba envío auto 2".
+   - Estudiante 3, tipo "Salud", severidad "Alta", descripción "Prueba envío auto 3".
+4. Para cada uno, pulsar **Guardar** (NO pulsar "Enviar reporte"; queremos que queden pendientes).
+5. Verificar que aparecen en el historial con el estado pendiente.
+
+### 14B.3 — Verificar el backlog en Room
+
+Abrir **Database Inspector** → tabla `incidentes`:
+
+```sql
+SELECT id, uuid, descripcion, enviado, local_only, is_deleted
+FROM incidentes
+WHERE descripcion LIKE 'Prueba envío auto%';
+```
+
+**Esperado:**
+- ✅ 3 filas.
+- ✅ `enviado = 0` en todas.
+- ✅ `local_only = 1` en todas.
+- ✅ `is_deleted = 0` en todas.
+
+### 14B.4 — Restaurar conexión y observar notificaciones
+
+1. Limpiar logcat: `adb logcat -c`
+2. Empezar a capturar logs:
+   ```bash
+   adb logcat | grep -E "SyncWorker|SendPendingIncidents|Telegram|alegriapp_sync"
+   ```
+3. **Desactivar modo avión**.
+4. **Mirar el dispositivo, no la app**:
+   - A los pocos segundos debe aparecer en la barra superior una notificación
+     persistente con título **"Enviando incidentes pendientes"** y texto
+     **"0 / 3 enviados"** + barra de progreso indeterminada/lineal.
+   - El icono es la flecha de subida del sistema.
+   - La notificación va actualizándose: "1 / 3", "2 / 3", "3 / 3".
+5. Al terminar, **la notificación de progreso desaparece** y aparece una nueva:
+   - Título **"Incidentes enviados"** (verde si 100% OK) o
+     **"Envío parcial de incidentes"** (si alguno falló).
+   - Texto: **"3 enviados por Telegram"** (o `"2 enviados • 1 con error"`).
+   - Esta notificación es **descartable** (no persistente).
+
+### 14B.5 — Verificar que llegaron a Telegram
+
+Abrir el chat de Telegram configurado en `TELEGRAM_CHAT_ID`.
+
+**Esperado:**
+- ✅ 3 mensajes nuevos con los reportes de incidente.
+- ✅ Cada uno con nombre del estudiante, tipo, severidad y descripción.
+
+### 14B.6 — Verificar que Room marcó como enviado
+
+```sql
+SELECT id, descripcion, enviado, local_only
+FROM incidentes
+WHERE descripcion LIKE 'Prueba envío auto%';
+```
+
+**Esperado:**
+- ✅ Los 3 ahora tienen `enviado = 1`.
+- ✅ `local_only` sigue siendo `1` (los incidentes locales nunca dejan de serlo;
+  solo se marca "enviado por Telegram").
+- ✅ Si reabres la pantalla Incidentes, ya no aparecen como pendientes.
+
+### 14B.7 — Idempotencia: forzar otro sync
+
+Forzar un sync adicional (cerrar/abrir app o esperar al periodic worker).
+
+**Esperado:**
+- ✅ **NO se envían los 3 mensajes otra vez** a Telegram (la query
+  `getPendingTelegramSend()` filtra por `enviado = 0`).
+- ✅ No aparecen notificaciones adicionales en el dispositivo.
+
+### 14B.8 — Caso: app cerrada cuando vuelve la red
+
+1. Crear 2 incidentes pendientes en modo avión.
+2. **Cerrar la app por completo** desde el conmutador de tareas (no solo minimizar).
+3. Desactivar modo avión.
+4. Esperar entre 15 segundos y 15 minutos (depende de cuándo dispare el WorkManager).
+5. **Mirar la barra de notificaciones del dispositivo sin abrir la app.**
+
+**Esperado:**
+- ✅ La notificación "Enviando incidentes pendientes" aparece igual.
+- ✅ Al terminar, la notificación de resultado se publica.
+- ✅ Los mensajes llegan a Telegram aunque la app no estaba abierta.
+
+> Para acelerar el WorkManager en testing, puedes forzarlo:
+> ```bash
+> # Lista los jobs pendientes; identifica el SyncWorker
+> adb shell dumpsys jobscheduler | grep -A 4 alegriapp
+> ```
+
+### 14B.9 — Caso: Telegram falla (token inválido)
+
+1. Editar temporalmente `local.properties`:
+   ```properties
+   TELEGRAM_BOT_TOKEN=token_invalido_123
+   ```
+2. Recompilar e instalar: `./gradlew installDebug`.
+3. Crear 1 incidente offline.
+4. Restaurar red.
+5. Esperar el sync.
+
+**Esperado:**
+- ✅ Aparece notificación de progreso "Enviando incidentes pendientes" "0 / 1".
+- ✅ Al terminar, notificación: **"Envío parcial de incidentes" — "0 enviados • 1 con error"**.
+- ✅ En Room: el incidente sigue con `enviado = 0` (queda pendiente para
+  el próximo intento cuando se corrija el token).
+
+Restaurar el token correcto y verificar que el próximo sync sí lo envía.
+
+### 14B.10 — Caso: usuario rechazó POST_NOTIFICATIONS (Android 13+)
+
+1. En Ajustes → Apps → AlegriAPP → Notificaciones → desactivar.
+2. Crear incidentes offline.
+3. Restaurar red.
+
+**Esperado:**
+- ✅ **No aparecen notificaciones del sistema** (el usuario las bloqueó).
+- ✅ **Pero el envío a Telegram sí ocurre** igual (verificable en Telegram y en Room: `enviado = 1`).
+- ✅ El worker NO crashea (la `SecurityException` se absorbe en `SyncNotifications`).
+
+### 14B.11 — Caso: incidente con estudiante eliminado localmente
+
+Edge case: si el estudiante asociado al incidente fue soft-deleted localmente,
+el envío falla controladamente.
+
+1. Crear incidente offline para un estudiante.
+2. Antes de restaurar red, marcar al estudiante como eliminado (manual via Database Inspector):
+   ```sql
+   UPDATE students SET is_deleted = 1 WHERE id = [el id];
+   ```
+3. Restaurar red.
+
+**Esperado:**
+- ✅ El incidente cuenta como fallo (`failed = 1`).
+- ✅ Notificación: "Envío parcial — 0 enviados • 1 con error".
+- ✅ El incidente queda con `enviado = 0` para reintento futuro.
+
+---
+
+## PRUEBA 14C — Doble envío: Supabase + Telegram en el mismo sync (Fase 14)
+
+> **Esta prueba confirma que las dos rutas de salida coexisten** y se disparan
+> en el mismo evento de recuperar conexión:
+>   - Supabase (tabla `incidentes`) vía `upsertIncidente` con `sync_status`.
+>   - Telegram (mensaje al chat) vía `SendIncidentReportUseCase` con `enviado`.
+
+### Pasos
+
+1. **Pre-requisito:** SQL aplicado:
+   - `supabase_add_uuid_columns.sql`
+   - `supabase_grant_select_incidentes.sql`
+   - `supabase_grant_insert_incidentes.sql` ← **crítico para esta prueba**
+2. Limpiar logcat: `adb logcat -c`
+3. Activar modo avión.
+4. Crear **2 incidentes** seleccionando estudiantes **del listado oficial** (id positivo):
+   - Estudiante 1: "Doble canal — Test A".
+   - Estudiante 2: "Doble canal — Test B".
+5. Pulsar Guardar en ambos (NO pulsar "Enviar reporte").
+6. Verificar en Database Inspector:
+   ```sql
+   SELECT uuid, descripcion, enviado, sync_status, remote_id, local_only
+   FROM incidentes
+   WHERE descripcion LIKE 'Doble canal%';
+   ```
+   Esperado:
+   - 2 filas.
+   - `enviado = 0` (pendiente Telegram).
+   - `sync_status = 'IDLE'` (pendiente Supabase).
+   - `local_only = 1`.
+   - `remote_id = NULL`.
+7. **Desactivar modo avión.**
+8. Mirar el dispositivo:
+   - Aparece la notificación foreground "Enviando incidentes pendientes — X / 2".
+   - Tras unos segundos, notificación de resultado "Incidentes enviados — 2 enviados por Telegram".
+
+### Verificar las dos rutas independientemente
+
+**Supabase** (tabla remota):
+```sql
+SELECT uuid, descripcion, estado, nivel_gravedad
+FROM incidentes
+WHERE descripcion LIKE 'Doble canal%';
+```
+Esperado: ✅ 2 filas con los `uuid` que viste en mobile.
+
+**Telegram** (chat): ✅ 2 mensajes nuevos con el reporte de cada incidente.
+
+**Mobile** (Room tras el sync):
+```sql
+SELECT uuid, descripcion, enviado, sync_status, remote_id, local_only
+FROM incidentes
+WHERE descripcion LIKE 'Doble canal%';
+```
+Esperado:
+- `enviado = 1` (✅ Telegram OK).
+- `sync_status = 'SUCCESS'` (✅ Supabase OK).
+- `remote_id` poblado con el SERIAL del servidor.
+- `local_only = 0` (ya está en Supabase, deja de ser solo local).
+
+### Casos parciales
+
+| Escenario | Supabase | Telegram | Estado final esperado |
+|-----------|----------|----------|------------------------|
+| Ambos OK | ✅ | ✅ | `sync_status=SUCCESS`, `enviado=1` |
+| Solo Supabase OK (token Telegram inválido) | ✅ | ❌ | `sync_status=SUCCESS`, `enviado=0` (reintento Telegram en próximo sync) |
+| Solo Telegram OK (RLS INSERT no aplicado en Supabase) | ❌ | ✅ | `sync_status=ERROR`+`sync_error`, `enviado=1` (reintento Supabase en próximo sync) |
+| Ambos fallan | ❌ | ❌ | `sync_status=ERROR`, `enviado=0` (reintento ambos canales) |
+
+Para forzar cada escenario, modifica temporalmente `local.properties`
+(`TELEGRAM_BOT_TOKEN=invalido` o `SUPABASE_KEY=invalido`) y recompila.
+
+### Logcat útil
+
+```bash
+adb logcat | grep -E "SyncRepository|SendPendingIncidents|upsertIncidente|TelegramApi"
+```
+
+Debe verse el orden:
+1. `pullIncidentsFromRemote` (PULL desde servidor)
+2. `upsertIncidente` (PUSH Supabase) × 2
+3. `SendPendingIncidents` invoca Telegram × 2
+4. Notificación foreground → resultado
+
+---
+
 ## PRUEBA 15 — Comportamiento sin Supabase configurado
 
 1. En `local.properties`, dejar `SUPABASE_URL` y `SUPABASE_KEY` vacíos.
@@ -573,6 +855,7 @@ Para considerar Offline First **aprobado en QA**, deben pasar:
 - [ ] Prueba 11 (timestamp última sync persistente)
 - [ ] Prueba 12 (calificaciones offline)
 - [ ] Prueba 13 (Telegram no se rompió)
+- [ ] **Prueba 14B (auto-envío incidentes + notificación sistema)** — **crítico** para F13
 - [ ] Prueba 15 (sin Supabase configurado no crashea)
 
-Mínimo aceptable: las 14 anteriores deben pasar antes de mergear a `main`.
+Mínimo aceptable: las anteriores deben pasar antes de mergear a `main`.

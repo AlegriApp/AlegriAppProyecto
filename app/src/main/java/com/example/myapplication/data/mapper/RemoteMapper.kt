@@ -8,8 +8,10 @@ import com.example.myapplication.data.local.entity.StudentEntity
 import com.example.myapplication.data.remote.dto.AsistenciaInsertDto
 import com.example.myapplication.data.remote.dto.CalificacionInsertDto
 import com.example.myapplication.data.remote.dto.EstudianteRemoteDto
+import com.example.myapplication.data.remote.dto.IncidenteInsertDto
 import com.example.myapplication.data.remote.dto.IncidenteRemoteDto
 import com.example.myapplication.domain.model.AttendanceStatus
+import com.example.myapplication.domain.model.IncidentType
 import com.example.myapplication.domain.model.sync.SyncState
 import java.time.Instant
 
@@ -104,6 +106,39 @@ fun AttendanceEntity.toAsistenciaInsertDto(defaultCourseId: Long): AsistenciaIns
     docenteId = teacherId,
     sincronizacionPendiente = false
 )
+
+/**
+ * Construye el DTO para push de incidente a Supabase.
+ * Resuelve `tipo_incidente_id` desde el enum local y traduce `severity` al
+ * vocabulario del CHECK del servidor.
+ *
+ * Requiere `defaultTipoIncidenteId` por si el enum local es `OTHER` o cualquier
+ * valor que no mapea limpio a un id remoto.
+ */
+fun IncidentEntity.toIncidenteInsertDto(
+    defaultTipoIncidenteId: Long,
+    defaultReportadoPorId: Long? = null
+): IncidenteInsertDto = IncidenteInsertDto(
+    uuid = uuid,
+    estudianteId = studentId,
+    tipoIncidenteId = mapIncidentTypeLocalToRemoteId(type, defaultTipoIncidenteId),
+    descripcion = description,
+    fechaHora = dateTime,
+    nivelGravedad = mapSeverityLocalToRemote(severity),
+    estado = "abierto",
+    observaciones = teacherName?.let { "Reportado por: $it" },
+    reportadoPorId = defaultReportadoPorId
+)
+
+/** Inverso de [mapTipoIncidenteRemote] en SyncRepositoryImpl. */
+fun mapIncidentTypeLocalToRemoteId(localTypeName: String, fallback: Long): Long =
+    when (runCatching { IncidentType.valueOf(localTypeName) }.getOrNull()) {
+        IncidentType.BEHAVIOR -> 1L
+        IncidentType.ACADEMIC -> 2L
+        IncidentType.HEALTH -> 4L
+        IncidentType.OTHER -> fallback
+        null -> fallback
+    }
 
 fun GradeEntity.toCalificacionInsertDto(
     defaultCourseId: Long,

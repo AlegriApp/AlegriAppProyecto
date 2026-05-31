@@ -39,4 +39,10 @@ class IncidentRepositoryImpl(
     override suspend fun markIncidentAsSent(incidentId: Long) {
         incidentDao.markAsSent(incidentId)
     }
+
+    override suspend fun getPendingTelegramSend(): List<Incident> =
+        incidentDao.getPendingTelegramSend().map { it.toDomain() }
+
+    override fun observePendingTelegramCount(): kotlinx.coroutines.flow.Flow<Int> =
+        incidentDao.observePendingTelegramCount()
 }

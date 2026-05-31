@@ -1,6 +1,7 @@
 package com.example.myapplication.data.repository
 
 import com.example.myapplication.data.local.dao.StudentDao
+import com.example.myapplication.data.mapper.toDomain
 import com.example.myapplication.data.mapper.toDomainList
 import com.example.myapplication.data.mapper.toEntity
 import com.example.myapplication.domain.model.Student
@@ -23,4 +24,7 @@ class StudentRepositoryImpl(
         }
         studentDao.insertOrReplaceStudents(entities)
     }
+
+    override suspend fun findById(studentId: Long): Student? =
+        studentDao.getStudentById(studentId)?.toDomain()
 }

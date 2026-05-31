@@ -6,6 +6,7 @@ import com.example.myapplication.data.remote.dto.AsistenciaRemoteResponseDto
 import com.example.myapplication.data.remote.dto.CalificacionInsertDto
 import com.example.myapplication.data.remote.dto.CalificacionRemoteResponseDto
 import com.example.myapplication.data.remote.dto.EstudianteRemoteDto
+import com.example.myapplication.data.remote.dto.IncidenteInsertDto
 import com.example.myapplication.data.remote.dto.IncidenteRemoteDto
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -74,12 +75,9 @@ interface SupabaseApiService {
         @Body body: CalificacionInsertDto
     ): List<CalificacionRemoteResponseDto>
 
-    // ---------- INCIDENTES (PULL ONLY) ----------
+    // ---------- INCIDENTES (PULL + PUSH desde Fase 14) ----------
 
-    /**
-     * PULL de todos los incidentes activos. NO existe método POST aquí
-     * intencionalmente — mobile NO escribe incidentes.
-     */
+    /** PULL de todos los incidentes activos. */
     @GET(SupabaseConfig.INCIDENTES_TABLE)
     suspend fun getIncidentes(
         @Query("select") select: String = SupabaseConfig.INCIDENTE_SELECT,
@@ -95,5 +93,16 @@ interface SupabaseApiService {
         @Query("updated_at") updatedSince: String,
         @Query("deleted_at") deletedFilter: String = "is.null",
         @Query("order") order: String = "updated_at.desc"
+    ): List<IncidenteRemoteDto>
+
+    /**
+     * PUSH idempotente de incidentes desde mobile.
+     * Requiere `supabase_grant_insert_incidentes.sql` aplicado en el servidor.
+     */
+    @POST(SupabaseConfig.INCIDENTES_TABLE)
+    @Headers("Prefer: resolution=merge-duplicates,return=representation")
+    suspend fun upsertIncidente(
+        @Query("on_conflict") onConflict: String = "uuid",
+        @Body body: IncidenteInsertDto
     ): List<IncidenteRemoteDto>
 }

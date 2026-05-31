@@ -34,6 +34,8 @@ android {
         val defaultMateriaId = localProperties.getProperty("SUPABASE_DEFAULT_MATERIA_ID") ?: "1"
         val defaultTipoEvalId = localProperties.getProperty("SUPABASE_DEFAULT_TIPO_EVALUACION_ID") ?: "6"
         val defaultPeriodoId = localProperties.getProperty("SUPABASE_DEFAULT_PERIODO_ID") ?: "1"
+        val defaultTipoIncidenteId = localProperties.getProperty("SUPABASE_DEFAULT_TIPO_INCIDENTE_ID") ?: "1"
+        val defaultReportadoPorId = localProperties.getProperty("SUPABASE_DEFAULT_REPORTADO_POR_ID") ?: "0"
         buildConfigField("String", "TELEGRAM_BOT_TOKEN", "\"$telegramToken\"")
         buildConfigField("String", "TELEGRAM_DEFAULT_CHAT_ID", "\"$telegramChatId\"")
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
@@ -42,6 +44,8 @@ android {
         buildConfigField("long", "SUPABASE_DEFAULT_MATERIA_ID", "${defaultMateriaId}L")
         buildConfigField("long", "SUPABASE_DEFAULT_TIPO_EVALUACION_ID", "${defaultTipoEvalId}L")
         buildConfigField("long", "SUPABASE_DEFAULT_PERIODO_ID", "${defaultPeriodoId}L")
+        buildConfigField("long", "SUPABASE_DEFAULT_TIPO_INCIDENTE_ID", "${defaultTipoIncidenteId}L")
+        buildConfigField("long", "SUPABASE_DEFAULT_REPORTADO_POR_ID", "${defaultReportadoPorId}L")
     }
 
     buildTypes {
