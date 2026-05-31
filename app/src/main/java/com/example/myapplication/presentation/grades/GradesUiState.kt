@@ -2,6 +2,7 @@ package com.example.myapplication.presentation.grades
 
 import com.example.myapplication.domain.model.Grade
 import com.example.myapplication.domain.model.Student
+import com.example.myapplication.presentation.common.CatalogOption
 import com.example.myapplication.presentation.grades.components.GradeStudentMock
 import com.example.myapplication.presentation.grades.components.GradeVisualStatus
 
@@ -9,11 +10,17 @@ data class GradesUiState(
     val isLoading: Boolean = true,
     val studentsDomain: List<Student> = emptyList(),
     val gradesDomain: List<Grade> = emptyList(),
+    val courseOptions: List<CatalogOption> = emptyList(),
+    val subjectOptions: List<CatalogOption> = emptyList(),
+    val evaluationTypeOptions: List<CatalogOption> = emptyList(),
+    val periodOptions: List<CatalogOption> = emptyList(),
+    val selectedCourseId: Long? = null,
+    val selectedSubjectId: Long? = null,
+    val selectedEvaluationTypeId: Long? = null,
+    val selectedPeriodId: Long? = null,
+    val courseName: String = "",
     val selectedSubject: String = "",
     val selectedPeriod: String = "",
-    val subjects: List<String> = emptyList(),
-    val periods: List<String> = emptyList(),
-    val courseName: String = "",
     val students: List<GradeStudentMock> = emptyList(),
     val grades: Map<Long, Double> = emptyMap(),
     val classAverage: Double = 0.0,

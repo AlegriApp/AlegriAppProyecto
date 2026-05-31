@@ -25,6 +25,7 @@ import com.example.myapplication.ui.theme.MyApplicationTheme
 @Composable
 fun AttendanceListCard(
     courseName: String,
+    subjectName: String = "",
     students: List<AttendanceStudentUi>,
     registeredCount: Int,
     statusByStudent: Map<Long, AttendanceStatus>,
@@ -57,6 +58,13 @@ fun AttendanceListCard(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    if (subjectName.isNotBlank()) {
+                        Text(
+                            text = subjectName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Text(
                         text = "Lista de estudiantes",
                         style = MaterialTheme.typography.labelMedium,

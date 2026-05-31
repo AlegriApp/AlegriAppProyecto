@@ -1,21 +1,34 @@
 package com.example.myapplication.data.repository
 
+import com.example.myapplication.data.remote.api.TelegramApiFactory
 import com.example.myapplication.data.remote.api.TelegramApiService
 import com.example.myapplication.data.remote.dto.TelegramMessageRequest
 import com.example.myapplication.domain.model.telegram.TelegramSendOutcome
 import com.example.myapplication.domain.repository.TelegramRepository
+import okhttp3.OkHttpClient
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 class TelegramRepositoryImpl(
-    private val api: TelegramApiService,
-    private val botToken: String
+    private val defaultApi: TelegramApiService,
+    private val defaultBotToken: String,
+    private val httpClient: OkHttpClient
 ) : TelegramRepository {
 
-    override suspend fun sendMessage(chatId: String, message: String): TelegramSendOutcome {
+    override suspend fun sendMessage(
+        chatId: String,
+        message: String,
+        botToken: String?
+    ): TelegramSendOutcome {
+        val token = botToken?.takeIf { it.isNotBlank() } ?: defaultBotToken
+        val api = if (token == defaultBotToken) {
+            defaultApi
+        } else {
+            TelegramApiFactory.getService(token, httpClient)
+        }
         when {
-            botToken.isBlank() -> return TelegramSendOutcome.Failure(
+            token.isBlank() -> return TelegramSendOutcome.Failure(
                 message = "Token del bot no configurado. Agrega TELEGRAM_BOT_TOKEN en local.properties y recompila.",
                 type = TelegramSendOutcome.FailureType.MissingConfiguration
             )

@@ -11,7 +11,8 @@ fun StudentEntity.toDomain(): Student = Student(
     grade = grade,
     section = section,
     representativeName = representativeName,
-    telegramChatId = telegramChatId
+    telegramChatId = telegramChatId,
+    representativeId = representativeId
 )
 
 fun Student.toEntity(existing: StudentEntity? = null): StudentEntity = StudentEntity(
@@ -21,6 +22,7 @@ fun Student.toEntity(existing: StudentEntity? = null): StudentEntity = StudentEn
     section = section,
     representativeName = representativeName,
     telegramChatId = telegramChatId,
+    representativeId = representativeId ?: existing?.representativeId,
     uuid = existing?.uuid ?: newUuid(),
     remoteId = existing?.remoteId,
     syncStatus = existing?.syncStatus ?: SyncState.Stored.SUCCESS,

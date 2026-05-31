@@ -12,15 +12,19 @@ data class EstudianteRemoteDto(
     val estado: String? = null,
     @SerializedName("updated_at") val updatedAt: String? = null,
     @SerializedName("deleted_at") val deletedAt: String? = null,
-    @SerializedName("estudiante_curso") val estudianteCurso: List<EstudianteCursoRemoteDto>? = null
+    @SerializedName("estudiante_curso") val estudianteCurso: List<EstudianteCursoRemoteDto>? = null,
+    @SerializedName("estudiante_representante") val estudianteRepresentante: List<EstudianteRepresentanteRemoteDto>? = null
 )
 
 data class EstudianteCursoRemoteDto(
+    @SerializedName("curso_id") val cursoId: Long? = null,
     val estado: String? = null,
     val cursos: CursoRemoteDto? = null
 )
 
 data class CursoRemoteDto(
+    val id: Long? = null,
+    val nombre: String? = null,
     val paralelo: String? = null,
     @SerializedName("niveles_academicos") val nivelAcademico: NivelAcademicoRemoteDto? = null
 )

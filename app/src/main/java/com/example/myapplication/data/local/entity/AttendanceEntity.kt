@@ -11,8 +11,12 @@ import com.example.myapplication.domain.model.sync.SyncState
     indices = [
         Index(value = ["estudiante_id"]),
         Index(value = ["curso_id"]),
+        Index(value = ["materia_id"]),
         Index(value = ["fecha"]),
-        Index(value = ["estudiante_id", "fecha"], unique = true),
+        Index(
+            value = ["estudiante_id", "curso_id", "fecha", "materia_id"],
+            unique = true
+        ),
         Index(value = ["uuid"], unique = true),
         Index(value = ["sync_status"]),
         Index(value = ["is_deleted"])

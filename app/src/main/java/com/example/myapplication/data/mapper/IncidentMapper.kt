@@ -4,13 +4,12 @@ import com.example.myapplication.core.common.newUuid
 import com.example.myapplication.data.local.entity.IncidentEntity
 import com.example.myapplication.domain.model.Incident
 import com.example.myapplication.domain.model.IncidentSeverity
-import com.example.myapplication.domain.model.IncidentType
 import com.example.myapplication.domain.model.sync.SyncState
 
 fun IncidentEntity.toDomain(): Incident = Incident(
     id = id,
     studentId = studentId,
-    type = runCatching { IncidentType.valueOf(type) }.getOrDefault(IncidentType.OTHER),
+    type = type,
     severity = runCatching { IncidentSeverity.valueOf(severity) }.getOrDefault(IncidentSeverity.MEDIUM),
     description = description,
     dateTime = dateTime,
@@ -24,7 +23,7 @@ fun Incident.toEntity(
 ): IncidentEntity = IncidentEntity(
     id = existing?.id ?: id,
     studentId = studentId,
-    type = type.name,
+    type = type,
     severity = severity.name,
     description = description,
     dateTime = dateTime,

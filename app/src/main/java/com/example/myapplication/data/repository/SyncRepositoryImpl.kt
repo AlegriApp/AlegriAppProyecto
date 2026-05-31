@@ -3,9 +3,12 @@ package com.example.myapplication.data.repository
 import com.example.myapplication.BuildConfig
 import com.example.myapplication.core.network.NetworkMonitor
 import com.example.myapplication.data.local.dao.AttendanceDao
+import com.example.myapplication.data.local.dao.CatalogDao
 import com.example.myapplication.data.local.dao.GradeDao
 import com.example.myapplication.data.local.dao.IncidentDao
 import com.example.myapplication.data.local.dao.StudentDao
+import com.example.myapplication.data.local.entity.StudentCourseEntity
+import com.example.myapplication.data.mapper.toSyncBundle
 import com.example.myapplication.data.mapper.mapSeverityRemoteToLocalName
 import com.example.myapplication.data.mapper.toAsistenciaInsertDto
 import com.example.myapplication.data.mapper.toCalificacionInsertDto
@@ -14,8 +17,8 @@ import com.example.myapplication.data.mapper.toIncidentEntity
 import com.example.myapplication.data.mapper.toIncidenteInsertDto
 import com.example.myapplication.data.mapper.toStudentEntity
 import com.example.myapplication.data.remote.api.SupabaseApiService
-import com.example.myapplication.domain.model.IncidentType
 import com.example.myapplication.domain.model.sync.SyncOutcome
+import com.example.myapplication.domain.repository.CatalogRepository
 import com.example.myapplication.domain.repository.SyncRepository
 
 /**
@@ -47,6 +50,8 @@ class SyncRepositoryImpl(
     private val attendanceDao: AttendanceDao,
     private val gradeDao: GradeDao,
     private val incidentDao: IncidentDao,
+    private val catalogDao: CatalogDao,
+    private val catalogRepository: CatalogRepository,
     private val networkMonitor: NetworkMonitor
 ) : SyncRepository {
 
@@ -60,17 +65,19 @@ class SyncRepositoryImpl(
             )
         }
 
+        val catalogsOutcome = catalogRepository.syncCatalogsFromRemote()
         val studentsOutcome = syncStudentsFromRemote()
         val incidentsOutcome = pullIncidentsFromRemote()
         val pendingOutcome = syncPendingRecords()
 
-        val failures = listOf(studentsOutcome, incidentsOutcome, pendingOutcome)
+        val failures = listOf(catalogsOutcome, studentsOutcome, incidentsOutcome, pendingOutcome)
             .filterIsInstance<SyncOutcome.Failure>()
         if (failures.isNotEmpty()) {
             return SyncOutcome.Failure(failures.joinToString(" | ") { it.message })
         }
 
         val parts = listOfNotNull(
+            (catalogsOutcome as? SyncOutcome.Success)?.message,
             (studentsOutcome as? SyncOutcome.Success)?.message,
             (incidentsOutcome as? SyncOutcome.Success)?.message,
             (pendingOutcome as? SyncOutcome.Success)?.message
@@ -91,9 +98,41 @@ class SyncRepositoryImpl(
             if (remoteStudents.isEmpty()) {
                 return SyncOutcome.Skipped("No hay estudiantes activos en el servidor.")
             }
-            val entities = remoteStudents.map { it.toStudentEntity() }
-            studentDao.insertOrReplaceStudents(entities)
-            SyncOutcome.Success("${entities.size} estudiantes sincronizados desde Supabase.")
+            val bundles = remoteStudents.map { it.toSyncBundle() }
+            studentDao.insertOrReplaceStudents(bundles.map { it.student })
+
+            // Matrículas desde tabla estudiante_curso (más fiable que el embed anidado).
+            val studentIds = bundles.map { it.student.id }.toSet()
+            val fromTable = api.getEstudianteCursosActivos()
+                .filter { it.estudianteId in studentIds && it.cursoId > 0L }
+                .map { row ->
+                    StudentCourseEntity(studentId = row.estudianteId, courseId = row.cursoId)
+                }
+            val fromEmbed = bundles.flatMap { it.courseLinks }
+            val courseLinks = if (fromTable.isNotEmpty()) {
+                fromTable
+            } else {
+                fromEmbed
+            }.distinctBy { "${it.studentId}_${it.courseId}" }
+
+            catalogDao.clearStudentRepresentatives()
+            if (courseLinks.isNotEmpty()) {
+                catalogDao.clearStudentCourses()
+                catalogDao.replaceStudentCourses(courseLinks)
+            }
+            catalogDao.replaceStudentRepresentatives(bundles.flatMap { it.representatives })
+            val extraTelegram = bundles.flatMap { it.telegramConfigs }
+            if (extraTelegram.isNotEmpty()) {
+                catalogDao.replaceTelegramConfigs(extraTelegram)
+            }
+            val linkSource = when {
+                fromTable.isNotEmpty() -> "tabla estudiante_curso"
+                fromEmbed.isNotEmpty() -> "embed estudiantes"
+                else -> "sin matrículas (revisa GRANT/RLS en estudiante_curso)"
+            }
+            SyncOutcome.Success(
+                "${bundles.size} estudiantes, ${courseLinks.size} matrículas curso ($linkSource)."
+            )
         }.getOrElse { error ->
             SyncOutcome.Failure(formatSyncError(error, "Error al traer estudiantes desde Supabase."))
         }
@@ -160,13 +199,8 @@ class SyncRepositoryImpl(
      * Si llega un id desconocido, se devuelve `OTHER` para no perder el incidente.
      * Mapeo robusto se hará con tabla `tipos_incidente` cuando se cachee.
      */
-    private fun mapTipoIncidenteRemote(tipoIncidenteId: Long): String = when (tipoIncidenteId) {
-        1L -> IncidentType.BEHAVIOR.name
-        2L -> IncidentType.ACADEMIC.name
-        3L -> IncidentType.OTHER.name // "Disciplinario" no existe en enum local
-        4L -> IncidentType.HEALTH.name
-        else -> IncidentType.OTHER.name
-    }
+    /** Guarda el id remoto como string para alinear con catálogo `tipos_incidente`. */
+    private fun mapTipoIncidenteRemote(tipoIncidenteId: Long): String = tipoIncidenteId.toString()
 
     // ---------- ASISTENCIAS + CALIFICACIONES (PUSH) ----------
 
@@ -187,7 +221,10 @@ class SyncRepositoryImpl(
                 attendanceDao.markAsSending(entity.uuid, now)
                 runCatching {
                     val response = api.upsertAsistencia(
-                        body = entity.toAsistenciaInsertDto(BuildConfig.SUPABASE_DEFAULT_CURSO_ID)
+                        body = entity.toAsistenciaInsertDto(
+                            defaultCourseId = BuildConfig.SUPABASE_DEFAULT_CURSO_ID,
+                            defaultMateriaId = BuildConfig.SUPABASE_DEFAULT_MATERIA_ID
+                        )
                     ).firstOrNull()
                     attendanceDao.markAsSynced(
                         uuid = entity.uuid,
@@ -280,6 +317,12 @@ class SyncRepositoryImpl(
 
     private fun formatSyncError(error: Throwable, fallback: String): String {
         val raw = error.message.orEmpty()
+        if (raw.contains("HTTP 400", ignoreCase = true) ||
+            raw.contains("42703", ignoreCase = true) ||
+            raw.contains("does not exist", ignoreCase = true)
+        ) {
+            return "Supabase rechazó la consulta (400). Actualiza la app o revisa columnas del esquema. Detalle: $raw"
+        }
         return when {
             raw.contains("row-level security", ignoreCase = true) ||
                 raw.contains("42501") ->

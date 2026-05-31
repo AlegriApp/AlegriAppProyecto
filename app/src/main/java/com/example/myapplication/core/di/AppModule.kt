@@ -6,6 +6,14 @@ import com.example.myapplication.BuildConfig
 import com.example.myapplication.data.local.AppDatabase
 import com.example.myapplication.data.local.DatabaseSeeder
 import com.example.myapplication.data.local.migrations.Migration_5_6
+import com.example.myapplication.data.local.migrations.Migration_6_7
+import com.example.myapplication.data.local.migrations.Migration_7_8
+import com.example.myapplication.data.local.migrations.Migration_8_9
+import com.example.myapplication.data.repository.CatalogRepositoryImpl
+import com.example.myapplication.domain.repository.CatalogRepository
+import com.example.myapplication.domain.usecase.attendance.GetAttendanceByDateAndCourseUseCase
+import com.example.myapplication.domain.usecase.grade.GetGradesByCatalogFiltersUseCase
+import com.example.myapplication.domain.usecase.student.GetStudentsByCourseUseCase
 import com.example.myapplication.core.network.NetworkMonitor
 import com.example.myapplication.core.network.RetrofitClient
 import com.example.myapplication.core.preferences.SyncPreferences
@@ -36,6 +44,7 @@ import com.example.myapplication.domain.usecase.incidents.SendIncidentReportUseC
 import com.example.myapplication.domain.usecase.incidents.SendPendingIncidentsUseCase
 import com.example.myapplication.domain.usecase.ocr.RecognizeTextFromImageUseCase
 import com.example.myapplication.domain.usecase.student.GetStudentsUseCase
+import com.example.myapplication.domain.usecase.telegram.SendParentTelegramUseCase
 import com.example.myapplication.domain.usecase.telegram.SendTelegramMessageUseCase
 import com.example.myapplication.services.mlkit.TextRecognitionProcessor
 import com.example.myapplication.services.telegram.TelegramConfig
@@ -62,6 +71,12 @@ object AppModule {
     @Volatile
     private var syncPreferences: SyncPreferences? = null
 
+    @Volatile
+    private var telegramHttpClient: OkHttpClient? = null
+
+    @Volatile
+    private var catalogRepository: CatalogRepository? = null
+
     fun provideDatabase(context: Context): AppDatabase =
         db ?: synchronized(this) {
             db ?: Room.databaseBuilder(
@@ -69,7 +84,10 @@ object AppModule {
                 AppDatabase::class.java,
                 "alegriapp.db"
             )
-                .addMigrations(Migration_5_6)
+                .addMigrations(Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9)
+                // Solo v1–v4 sin migración definida. No incluir 5 ni 6: chocan con Migration_5_6 / Migration_6_7.
+                .fallbackToDestructiveMigrationFrom(1, 2, 3, 4)
+                .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
                 .also { database ->
                     runBlocking(Dispatchers.IO) {
@@ -102,6 +120,15 @@ object AppModule {
             ).also { supabaseApi = it }
         }
 
+    fun provideCatalogRepository(context: Context): CatalogRepository =
+        catalogRepository ?: synchronized(this) {
+            catalogRepository ?: CatalogRepositoryImpl(
+                supabaseApi = provideSupabaseApiService(),
+                catalogDao = provideDatabase(context).catalogDao(),
+                studentDao = provideDatabase(context).studentDao()
+            ).also { catalogRepository = it }
+        }
+
     fun provideSyncRepository(context: Context): SyncRepository {
         val database = provideDatabase(context)
         return SyncRepositoryImpl(
@@ -110,6 +137,8 @@ object AppModule {
             attendanceDao = database.attendanceDao(),
             gradeDao = database.gradeDao(),
             incidentDao = database.incidentDao(),
+            catalogDao = database.catalogDao(),
+            catalogRepository = provideCatalogRepository(context),
             networkMonitor = provideNetworkMonitor(context)
         )
     }
@@ -141,6 +170,15 @@ object AppModule {
     fun provideGetAttendanceByDateUseCase(context: Context): GetAttendanceByDateUseCase =
         GetAttendanceByDateUseCase(provideAttendanceRepository(context))
 
+    fun provideGetAttendanceByDateAndCourseUseCase(context: Context): GetAttendanceByDateAndCourseUseCase =
+        GetAttendanceByDateAndCourseUseCase(provideAttendanceRepository(context))
+
+    fun provideGetStudentsByCourseUseCase(context: Context): GetStudentsByCourseUseCase =
+        GetStudentsByCourseUseCase(provideStudentRepository(context))
+
+    fun provideGetGradesByCatalogFiltersUseCase(context: Context): GetGradesByCatalogFiltersUseCase =
+        GetGradesByCatalogFiltersUseCase(provideGradeRepository(context))
+
     fun provideSaveAttendanceUseCase(context: Context): SaveAttendanceUseCase =
         SaveAttendanceUseCase(provideAttendanceRepository(context))
 
@@ -153,11 +191,18 @@ object AppModule {
     fun provideSaveIncidentUseCase(context: Context): SaveIncidentUseCase =
         SaveIncidentUseCase(provideIncidentRepository(context))
 
+    fun provideSendParentTelegramUseCase(context: Context): SendParentTelegramUseCase =
+        SendParentTelegramUseCase(
+            sendTelegramMessageUseCase = provideSendTelegramMessageUseCase(),
+            catalogRepository = provideCatalogRepository(context),
+            defaultChatId = BuildConfig.TELEGRAM_DEFAULT_CHAT_ID,
+            defaultBotToken = BuildConfig.TELEGRAM_BOT_TOKEN
+        )
+
     fun provideSendIncidentReportUseCase(context: Context): SendIncidentReportUseCase =
         SendIncidentReportUseCase(
-            sendTelegramMessageUseCase = provideSendTelegramMessageUseCase(),
-            incidentRepository = provideIncidentRepository(context),
-            defaultChatId = BuildConfig.TELEGRAM_DEFAULT_CHAT_ID
+            sendParentTelegramUseCase = provideSendParentTelegramUseCase(context),
+            incidentRepository = provideIncidentRepository(context)
         )
 
     fun provideSendPendingIncidentsUseCase(context: Context): SendPendingIncidentsUseCase =
@@ -178,17 +223,23 @@ object AppModule {
     fun provideAttendanceTranscriptionService(): AttendanceTranscriptionService =
         AttendanceTranscriptionService()
 
+    fun provideTelegramHttpClient(): OkHttpClient =
+        telegramHttpClient ?: synchronized(this) {
+            telegramHttpClient ?: OkHttpClient.Builder()
+                .addInterceptor(
+                    HttpLoggingInterceptor().apply {
+                        level = HttpLoggingInterceptor.Level.HEADERS
+                    }
+                )
+                .build()
+                .also { telegramHttpClient = it }
+        }
+
     fun provideTelegramApiService(): TelegramApiService {
         val botToken = BuildConfig.TELEGRAM_BOT_TOKEN
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.HEADERS
-        }
-        val okHttp = OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
-            .build()
         return Retrofit.Builder()
             .baseUrl(TelegramConfig.botBaseUrl(botToken.ifBlank { "placeholder" }))
-            .client(okHttp)
+            .client(provideTelegramHttpClient())
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(TelegramApiService::class.java)
@@ -196,8 +247,9 @@ object AppModule {
 
     fun provideTelegramRepository(): TelegramRepository =
         TelegramRepositoryImpl(
-            api = provideTelegramApiService(),
-            botToken = BuildConfig.TELEGRAM_BOT_TOKEN
+            defaultApi = provideTelegramApiService(),
+            defaultBotToken = BuildConfig.TELEGRAM_BOT_TOKEN,
+            httpClient = provideTelegramHttpClient()
         )
 
     fun provideSendTelegramMessageUseCase(): SendTelegramMessageUseCase =

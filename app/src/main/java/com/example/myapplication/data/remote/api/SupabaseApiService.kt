@@ -5,9 +5,16 @@ import com.example.myapplication.data.remote.dto.AsistenciaInsertDto
 import com.example.myapplication.data.remote.dto.AsistenciaRemoteResponseDto
 import com.example.myapplication.data.remote.dto.CalificacionInsertDto
 import com.example.myapplication.data.remote.dto.CalificacionRemoteResponseDto
+import com.example.myapplication.data.remote.dto.ConfiguracionTelegramRemoteDto
+import com.example.myapplication.data.remote.dto.CursoCatalogRemoteDto
+import com.example.myapplication.data.remote.dto.EstudianteCursoEnrollmentRemoteDto
 import com.example.myapplication.data.remote.dto.EstudianteRemoteDto
 import com.example.myapplication.data.remote.dto.IncidenteInsertDto
 import com.example.myapplication.data.remote.dto.IncidenteRemoteDto
+import com.example.myapplication.data.remote.dto.MateriaCatalogRemoteDto
+import com.example.myapplication.data.remote.dto.PeriodoAcademicoRemoteDto
+import com.example.myapplication.data.remote.dto.TipoEvaluacionRemoteDto
+import com.example.myapplication.data.remote.dto.TipoIncidenteRemoteDto
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Headers
@@ -22,6 +29,47 @@ import retrofit2.http.Query
  * un proceso externo a la app móvil.
  */
 interface SupabaseApiService {
+
+    // ---------- CATÁLOGOS (PULL) ----------
+
+    @GET(SupabaseConfig.CURSOS_TABLE)
+    suspend fun getCursosActivos(
+        @Query("select") select: String = "id,nombre,paralelo,anio_lectivo,periodo_academico_id,estado",
+        @Query("estado") estadoFilter: String = "eq.activo",
+        @Query("deleted_at") deletedFilter: String = "is.null"
+    ): List<CursoCatalogRemoteDto>
+
+    @GET(SupabaseConfig.MATERIAS_TABLE)
+    suspend fun getMateriasActivas(
+        @Query("select") select: String = "id,nombre,curso_id,estado",
+        @Query("estado") estadoFilter: String = "eq.activo",
+        @Query("deleted_at") deletedFilter: String = "is.null"
+    ): List<MateriaCatalogRemoteDto>
+
+    @GET(SupabaseConfig.TIPOS_EVALUACION_TABLE)
+    suspend fun getTiposEvaluacionActivos(
+        @Query("select") select: String = "id,nombre,activo",
+        @Query("activo") activoFilter: String = "eq.true"
+    ): List<TipoEvaluacionRemoteDto>
+
+    @GET(SupabaseConfig.PERIODOS_ACADEMICOS_TABLE)
+    suspend fun getPeriodosActivos(
+        @Query("select") select: String = "id,nombre,anio_lectivo,activo",
+        @Query("activo") activoFilter: String = "eq.true"
+    ): List<PeriodoAcademicoRemoteDto>
+
+    @GET(SupabaseConfig.TIPOS_INCIDENTE_TABLE)
+    suspend fun getTiposIncidenteActivos(
+        @Query("select") select: String = "id,nombre,activo",
+        @Query("activo") activoFilter: String = "eq.true"
+    ): List<TipoIncidenteRemoteDto>
+
+    @GET(SupabaseConfig.CONFIGURACION_TELEGRAM_TABLE)
+    suspend fun getConfiguracionTelegramActiva(
+        @Query("select") select: String = "id,chat_id,token_bot_encriptado,representante_id,estado_integracion,deleted_at",
+        @Query("estado_integracion") estadoFilter: String = "eq.activo",
+        @Query("deleted_at") deletedFilter: String = "is.null"
+    ): List<ConfiguracionTelegramRemoteDto>
 
     // ---------- ESTUDIANTES (PULL) ----------
 
@@ -38,6 +86,14 @@ interface SupabaseApiService {
         @Query("updated_at") updatedSince: String,
         @Query("deleted_at") deletedFilter: String = "is.null"
     ): List<EstudianteRemoteDto>
+
+    /** Matrículas activas (fuente fiable para filtrar estudiantes por curso). */
+    @GET(SupabaseConfig.ESTUDIANTE_CURSO_TABLE)
+    suspend fun getEstudianteCursosActivos(
+        @Query("select") select: String = "estudiante_id,curso_id,estado",
+        @Query("estado") estadoFilter: String = "eq.activo",
+        @Query("limit") limit: Int = 2000
+    ): List<EstudianteCursoEnrollmentRemoteDto>
 
     // ---------- ASISTENCIAS (PUSH + PULL) ----------
 

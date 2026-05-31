@@ -21,6 +21,7 @@ data class StudentEntity(
     val section: String,
     val representativeName: String,
     val telegramChatId: String?,
+    @ColumnInfo(name = "representative_id") val representativeId: Long? = null,
 
     // ----- Offline First v6 -----
     @ColumnInfo(name = "uuid") val uuid: String,

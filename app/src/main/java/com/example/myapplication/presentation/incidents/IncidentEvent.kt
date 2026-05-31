@@ -2,12 +2,12 @@ package com.example.myapplication.presentation.incidents
 
 import android.net.Uri
 import com.example.myapplication.domain.model.IncidentSeverity
-import com.example.myapplication.domain.model.IncidentType
 
 sealed interface IncidentEvent {
     data object LoadStudents : IncidentEvent
     data class StudentSelected(val studentId: Long) : IncidentEvent
-    data class TypeSelected(val type: IncidentType) : IncidentEvent
+    data class CourseSelected(val courseId: Long) : IncidentEvent
+    data class TypeSelected(val typeId: Long) : IncidentEvent
     data class SeveritySelected(val severity: IncidentSeverity) : IncidentEvent
     data class DescriptionChanged(val description: String) : IncidentEvent
     data class OcrImageSelected(val uri: Uri) : IncidentEvent

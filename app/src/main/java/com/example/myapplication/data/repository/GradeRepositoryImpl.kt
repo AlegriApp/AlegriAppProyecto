@@ -16,13 +16,37 @@ class GradeRepositoryImpl(
             entities.map { it.toDomain() }
         }
 
+    override fun observeGradesByCatalogFilters(
+        courseId: Long,
+        subjectId: Long,
+        evaluationTypeId: Long,
+        periodId: Long
+    ): Flow<List<Grade>> =
+        gradeDao.observeGradesByCatalogFilters(courseId, subjectId, evaluationTypeId, periodId)
+            .map { entities -> entities.map { it.toDomain() } }
+
     override suspend fun upsertGrade(grade: Grade) {
-        val existing = gradeDao.getByStudentSubjectPeriodAndDescription(
-            studentId = grade.studentId,
-            subject = grade.subject,
-            period = grade.period,
-            description = grade.activityName
-        )
+        val existing = if (
+            grade.courseId != null &&
+            grade.subjectId != null &&
+            grade.periodAcademicId != null &&
+            grade.evaluationTypeId != null
+        ) {
+            gradeDao.getByStudentCatalogAndDescription(
+                studentId = grade.studentId,
+                subjectId = grade.subjectId,
+                periodId = grade.periodAcademicId,
+                evaluationTypeId = grade.evaluationTypeId,
+                description = grade.activityName
+            )
+        } else {
+            gradeDao.getByStudentSubjectPeriodAndDescription(
+                studentId = grade.studentId,
+                subject = grade.subject,
+                period = grade.period,
+                description = grade.activityName
+            )
+        }
         gradeDao.insertOrReplaceGrade(grade.toEntity(existing = existing, markPending = true))
     }
 }

@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.core.di.AppModule
 import com.example.myapplication.presentation.attendance.components.AttendanceListCard
+import com.example.myapplication.presentation.common.CatalogDropdown
+import com.example.myapplication.presentation.common.CatalogOption
 import com.example.myapplication.presentation.common.OfflineBanner
 import com.example.myapplication.ui.theme.MyApplicationTheme
 
@@ -50,11 +52,13 @@ fun AttendanceScreenRoute(
     val context = LocalContext.current
     val viewModel = remember(context) {
         AttendanceViewModel(
-            getAttendanceByDateUseCase = AppModule.provideGetAttendanceByDateUseCase(context),
+            getAttendanceByDateAndCourseUseCase = AppModule.provideGetAttendanceByDateAndCourseUseCase(context),
+            catalogRepository = AppModule.provideCatalogRepository(context),
             saveAttendanceUseCase = AppModule.provideSaveAttendanceUseCase(context),
             recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context),
             attendanceTranscriptionService = AppModule.provideAttendanceTranscriptionService(),
-            sendTelegramMessageUseCase = AppModule.provideSendTelegramMessageUseCase(),
+            studentRepository = AppModule.provideStudentRepository(context),
+            sendParentTelegramUseCase = AppModule.provideSendParentTelegramUseCase(context),
             networkMonitor = AppModule.provideNetworkMonitor(context),
             syncRepository = AppModule.provideSyncRepository(context)
         )
@@ -161,6 +165,19 @@ fun AttendanceScreen(
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        CatalogDropdown(
+                            label = "Curso",
+                            options = uiState.courses.map { CatalogOption(it.first, it.second) },
+                            selectedId = uiState.selectedCourseId,
+                            onSelected = { viewModel.onEvent(AttendanceEvent.CourseSelected(it)) }
+                        )
+                        CatalogDropdown(
+                            label = "Materia",
+                            options = uiState.subjects.map { CatalogOption(it.first, it.second) },
+                            selectedId = uiState.selectedSubjectId,
+                            enabled = uiState.subjects.isNotEmpty(),
+                            onSelected = { viewModel.onEvent(AttendanceEvent.SubjectSelected(it)) }
+                        )
                     }
                 }
 
@@ -240,6 +257,7 @@ fun AttendanceScreen(
                     AttendanceListCard(
                         modifier = Modifier.widthIn(max = contentMaxWidth),
                         courseName = uiState.courseName,
+                        subjectName = uiState.subjectName,
                         students = uiState.students,
                         registeredCount = uiState.registeredCount,
                         statusByStudent = uiState.attendanceByStudent,

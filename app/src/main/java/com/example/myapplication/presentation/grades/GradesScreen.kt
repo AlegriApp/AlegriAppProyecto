@@ -61,11 +61,12 @@ fun GradesScreen(
     val context = LocalContext.current
     val viewModel = remember(context) {
         GradesViewModel(
-            getStudentsUseCase = AppModule.provideGetStudentsUseCase(context),
-            getGradesBySubjectAndPeriodUseCase = AppModule.provideGetGradesBySubjectAndPeriodUseCase(context),
+            getStudentsByCourseUseCase = AppModule.provideGetStudentsByCourseUseCase(context),
+            getGradesByCatalogFiltersUseCase = AppModule.provideGetGradesByCatalogFiltersUseCase(context),
+            catalogRepository = AppModule.provideCatalogRepository(context),
             saveGradeUseCase = AppModule.provideSaveGradeUseCase(context),
             recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context),
-            sendTelegramMessageUseCase = AppModule.provideSendTelegramMessageUseCase(),
+            sendParentTelegramUseCase = AppModule.provideSendParentTelegramUseCase(context),
             networkMonitor = AppModule.provideNetworkMonitor(context),
             syncRepository = AppModule.provideSyncRepository(context)
         )
@@ -85,11 +86,12 @@ fun GradesScreenRoute(
     val context = LocalContext.current
     val viewModel = remember(context) {
         GradesViewModel(
-            getStudentsUseCase = AppModule.provideGetStudentsUseCase(context),
-            getGradesBySubjectAndPeriodUseCase = AppModule.provideGetGradesBySubjectAndPeriodUseCase(context),
+            getStudentsByCourseUseCase = AppModule.provideGetStudentsByCourseUseCase(context),
+            getGradesByCatalogFiltersUseCase = AppModule.provideGetGradesByCatalogFiltersUseCase(context),
+            catalogRepository = AppModule.provideCatalogRepository(context),
             saveGradeUseCase = AppModule.provideSaveGradeUseCase(context),
             recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context),
-            sendTelegramMessageUseCase = AppModule.provideSendTelegramMessageUseCase(),
+            sendParentTelegramUseCase = AppModule.provideSendParentTelegramUseCase(context),
             networkMonitor = AppModule.provideNetworkMonitor(context),
             syncRepository = AppModule.provideSyncRepository(context)
         )
@@ -212,16 +214,18 @@ private fun GradesScreenContent(
 
             item {
                 GradeFilterSection(
-                    selectedSubject = uiState.selectedSubject,
-                    selectedPeriod = uiState.selectedPeriod,
-                    subjects = uiState.subjects,
-                    periods = uiState.periods,
-                    onSubjectSelected = {
-                        viewModel.onEvent(GradesEvent.SubjectSelected(it))
-                    },
-                    onPeriodSelected = {
-                        viewModel.onEvent(GradesEvent.PeriodSelected(it))
-                    }
+                    courseOptions = uiState.courseOptions,
+                    selectedCourseId = uiState.selectedCourseId,
+                    onCourseSelected = { viewModel.onEvent(GradesEvent.CourseSelected(it)) },
+                    subjectOptions = uiState.subjectOptions,
+                    selectedSubjectId = uiState.selectedSubjectId,
+                    onSubjectSelected = { viewModel.onEvent(GradesEvent.SubjectSelected(it)) },
+                    evaluationTypeOptions = uiState.evaluationTypeOptions,
+                    selectedEvaluationTypeId = uiState.selectedEvaluationTypeId,
+                    onEvaluationTypeSelected = { viewModel.onEvent(GradesEvent.EvaluationTypeSelected(it)) },
+                    periodOptions = uiState.periodOptions,
+                    selectedPeriodId = uiState.selectedPeriodId,
+                    onPeriodSelected = { viewModel.onEvent(GradesEvent.PeriodSelected(it)) }
                 )
             }
 
