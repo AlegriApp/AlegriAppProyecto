@@ -16,10 +16,12 @@ import com.example.myapplication.domain.usecase.grade.GetGradesByCatalogFiltersU
 import com.example.myapplication.domain.usecase.student.GetStudentsByCourseUseCase
 import com.example.myapplication.core.network.NetworkMonitor
 import com.example.myapplication.core.network.RetrofitClient
+import com.example.myapplication.core.preferences.AuthPreferences
 import com.example.myapplication.core.preferences.SyncPreferences
 import com.example.myapplication.core.sync.SyncScheduler
 import com.example.myapplication.data.remote.api.SupabaseApiService
 import com.example.myapplication.data.repository.AttendanceRepositoryImpl
+import com.example.myapplication.data.repository.AuthRepositoryImpl
 import com.example.myapplication.data.repository.GradeRepositoryImpl
 import com.example.myapplication.data.repository.IncidentRepositoryImpl
 import com.example.myapplication.data.repository.OcrRepositoryImpl
@@ -29,6 +31,7 @@ import com.example.myapplication.data.repository.TelegramRepositoryImpl
 import com.example.myapplication.data.remote.api.TelegramApiService
 import com.example.myapplication.domain.repository.SyncRepository
 import com.example.myapplication.domain.repository.AttendanceRepository
+import com.example.myapplication.domain.repository.AuthRepository
 import com.example.myapplication.domain.repository.GradeRepository
 import com.example.myapplication.domain.repository.IncidentRepository
 import com.example.myapplication.domain.repository.OcrRepository
@@ -42,6 +45,7 @@ import com.example.myapplication.domain.usecase.grade.SaveGradeUseCase
 import com.example.myapplication.domain.usecase.incidents.SaveIncidentUseCase
 import com.example.myapplication.domain.usecase.incidents.SendIncidentReportUseCase
 import com.example.myapplication.domain.usecase.incidents.SendPendingIncidentsUseCase
+import com.example.myapplication.domain.usecase.auth.LoginUseCase
 import com.example.myapplication.domain.usecase.ocr.RecognizeTextFromImageUseCase
 import com.example.myapplication.domain.usecase.student.GetStudentsUseCase
 import com.example.myapplication.domain.usecase.telegram.SendParentTelegramUseCase
@@ -72,10 +76,16 @@ object AppModule {
     private var syncPreferences: SyncPreferences? = null
 
     @Volatile
+    private var authPreferences: AuthPreferences? = null
+
+    @Volatile
     private var telegramHttpClient: OkHttpClient? = null
 
     @Volatile
     private var catalogRepository: CatalogRepository? = null
+
+    @Volatile
+    private var authRepository: AuthRepository? = null
 
     fun provideDatabase(context: Context): AppDatabase =
         db ?: synchronized(this) {
@@ -112,6 +122,11 @@ object AppModule {
             syncPreferences ?: SyncPreferences(context.applicationContext).also { syncPreferences = it }
         }
 
+    fun provideAuthPreferences(context: Context): AuthPreferences =
+        authPreferences ?: synchronized(this) {
+            authPreferences ?: AuthPreferences(context.applicationContext).also { authPreferences = it }
+        }
+
     fun provideSupabaseApiService(): SupabaseApiService? =
         supabaseApi ?: synchronized(this) {
             supabaseApi ?: RetrofitClient.createSupabaseApi(
@@ -127,6 +142,14 @@ object AppModule {
                 catalogDao = provideDatabase(context).catalogDao(),
                 studentDao = provideDatabase(context).studentDao()
             ).also { catalogRepository = it }
+        }
+
+    fun provideAuthRepository(context: Context): AuthRepository =
+        authRepository ?: synchronized(this) {
+            authRepository ?: AuthRepositoryImpl(
+                supabaseApi = provideSupabaseApiService(),
+                authPreferences = provideAuthPreferences(context)
+            ).also { authRepository = it }
         }
 
     fun provideSyncRepository(context: Context): SyncRepository {
@@ -166,6 +189,9 @@ object AppModule {
 
     fun provideGetStudentsUseCase(context: Context): GetStudentsUseCase =
         GetStudentsUseCase(provideStudentRepository(context))
+
+    fun provideLoginUseCase(context: Context): LoginUseCase =
+        LoginUseCase(provideAuthRepository(context))
 
     fun provideGetAttendanceByDateUseCase(context: Context): GetAttendanceByDateUseCase =
         GetAttendanceByDateUseCase(provideAttendanceRepository(context))

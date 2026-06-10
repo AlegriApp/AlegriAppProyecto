@@ -11,6 +11,7 @@ import com.example.myapplication.presentation.grades.GradeDetailScreen
 import com.example.myapplication.presentation.grades.GradesScreenRoute
 import com.example.myapplication.presentation.home.HomeScreen
 import com.example.myapplication.presentation.incidents.IncidentScreenRoute
+import com.example.myapplication.presentation.login.LoginScreenRoute
 
 @Composable
 fun AppNavGraph() {
@@ -18,8 +19,19 @@ fun AppNavGraph() {
 
     NavHost(
         navController = navController,
-        startDestination = AppRoutes.Home
+        startDestination = AppRoutes.Login
     ) {
+        composable(AppRoutes.Login) {
+            LoginScreenRoute(
+                onLoginSuccess = {
+                    navController.navigate(AppRoutes.Home) {
+                        popUpTo(AppRoutes.Login) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
         composable(AppRoutes.Home) {
             HomeScreen(
                 onOpenAttendance = { navController.navigate(AppRoutes.Attendance) },
