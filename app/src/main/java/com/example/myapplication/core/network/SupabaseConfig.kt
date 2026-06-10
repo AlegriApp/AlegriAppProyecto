@@ -5,6 +5,7 @@ package com.example.myapplication.core.network
  * Los IDs por defecto deben existir en el proyecto remoto o ajustarse en local.properties.
  */
 object SupabaseConfig {
+    const val USUARIOS_TABLE = "usuarios"
     const val ESTUDIANTES_TABLE = "estudiantes"
     const val ASISTENCIAS_TABLE = "asistencias"
     const val CALIFICACIONES_TABLE = "calificaciones"
@@ -28,6 +29,9 @@ object SupabaseConfig {
             "estudiante_curso(curso_id,estado,cursos(id,nombre,paralelo,niveles_academicos(nombre)))," +
             "estudiante_representante(es_principal,representante_id,deleted_at," +
             "representantes(id,nombre,apellido,configuracion_telegram(id,chat_id,token_bot_encriptado,estado_integracion,deleted_at)))"
+
+    const val USUARIO_SELECT =
+        "id,nombre,apellido,email,password_hash,rol_id,estado,ultimo_acceso,deleted_at,roles(nombre)"
 
     /**
      * Select de incidentes para PULL. Trae solo columnas necesarias para mobile.

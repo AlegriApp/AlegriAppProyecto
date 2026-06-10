@@ -15,6 +15,7 @@ import com.example.myapplication.data.remote.dto.MateriaCatalogRemoteDto
 import com.example.myapplication.data.remote.dto.PeriodoAcademicoRemoteDto
 import com.example.myapplication.data.remote.dto.TipoEvaluacionRemoteDto
 import com.example.myapplication.data.remote.dto.TipoIncidenteRemoteDto
+import com.example.myapplication.data.remote.dto.UsuarioRemoteDto
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Headers
@@ -29,6 +30,17 @@ import retrofit2.http.Query
  * un proceso externo a la app móvil.
  */
 interface SupabaseApiService {
+
+    // ---------- AUTH (PULL) ----------
+
+    @GET(SupabaseConfig.USUARIOS_TABLE)
+    suspend fun getUsuariosByEmail(
+        @Query("select") select: String = SupabaseConfig.USUARIO_SELECT,
+        @Query("email") emailFilter: String,
+        @Query("estado") estadoFilter: String = "eq.activo",
+        @Query("deleted_at") deletedFilter: String = "is.null",
+        @Query("limit") limit: Int = 1
+    ): List<UsuarioRemoteDto>
 
     // ---------- CATÁLOGOS (PULL) ----------
 
