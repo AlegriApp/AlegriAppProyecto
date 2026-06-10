@@ -1,5 +1,6 @@
 package com.example.myapplication.presentation.login
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.core.common.ResultState
@@ -13,13 +14,22 @@ import kotlinx.coroutines.launch
 
 class LoginViewModel(
     private val loginUseCase: LoginUseCase,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle()
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(LoginUiState())
+    private val _uiState = MutableStateFlow(
+        LoginUiState(
+            email = savedStateHandle[KEY_EMAIL] ?: "",
+            password = savedStateHandle[KEY_PASSWORD] ?: ""
+        )
+    )
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            uiState.collect(::persistDraftState)
+        }
         viewModelScope.launch {
             authRepository.observeSession().collect { session ->
                 _uiState.update {
@@ -30,6 +40,11 @@ class LoginViewModel(
                 }
             }
         }
+    }
+
+    private fun persistDraftState(state: LoginUiState) {
+        savedStateHandle[KEY_EMAIL] = state.email
+        savedStateHandle[KEY_PASSWORD] = state.password
     }
 
     fun onEmailChanged(value: String) {
@@ -104,5 +119,10 @@ class LoginViewModel(
                 }
             }
         }
+    }
+
+    private companion object {
+        const val KEY_EMAIL = "login.email"
+        const val KEY_PASSWORD = "login.password"
     }
 }

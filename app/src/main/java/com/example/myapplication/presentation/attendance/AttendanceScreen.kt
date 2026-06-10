@@ -37,7 +37,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.myapplication.core.di.AppModule
 import com.example.myapplication.presentation.attendance.components.AttendanceListCard
 import com.example.myapplication.presentation.common.CatalogDropdown
@@ -50,7 +54,8 @@ fun AttendanceScreenRoute(
     onBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val viewModel = remember(context) {
+    val viewModel: AttendanceViewModel = viewModel(factory = viewModelFactory {
+        initializer {
         AttendanceViewModel(
             getAttendanceByDateAndCourseUseCase = AppModule.provideGetAttendanceByDateAndCourseUseCase(context),
             catalogRepository = AppModule.provideCatalogRepository(context),
@@ -60,9 +65,11 @@ fun AttendanceScreenRoute(
             studentRepository = AppModule.provideStudentRepository(context),
             sendParentTelegramUseCase = AppModule.provideSendParentTelegramUseCase(context),
             networkMonitor = AppModule.provideNetworkMonitor(context),
-            syncRepository = AppModule.provideSyncRepository(context)
+            syncRepository = AppModule.provideSyncRepository(context),
+            savedStateHandle = createSavedStateHandle()
         )
-    }
+        }
+    })
     AttendanceScreen(
         viewModel = viewModel,
         onBack = onBack

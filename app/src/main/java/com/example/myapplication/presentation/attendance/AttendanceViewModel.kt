@@ -4,6 +4,7 @@ package com.example.myapplication.presentation.attendance
 
 import androidx.lifecycle.ViewModel
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 
 import android.net.Uri
@@ -79,6 +80,8 @@ class AttendanceViewModel(
 
     private val syncRepository: SyncRepository? = null,
 
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+
     initialState: AttendanceUiState = AttendanceUiState(
 
         isLoading = true,
@@ -91,7 +94,17 @@ class AttendanceViewModel(
 
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(initialState)
+    private val _uiState = MutableStateFlow(
+        initialState.copy(
+            selectedDate = savedStateHandle[KEY_SELECTED_DATE] ?: initialState.selectedDate,
+            dateLabel = savedStateHandle.get<String>(KEY_SELECTED_DATE)
+                ?.let { "Fecha: ${toHumanDate(it)}" }
+                ?: initialState.dateLabel,
+            selectedCourseId = savedStateHandle[KEY_SELECTED_COURSE_ID],
+            selectedSubjectId = savedStateHandle[KEY_SELECTED_SUBJECT_ID],
+            detectedOcrText = savedStateHandle[KEY_DETECTED_OCR_TEXT] ?: initialState.detectedOcrText
+        )
+    )
 
     val uiState: StateFlow<AttendanceUiState> = _uiState.asStateFlow()
 
@@ -104,6 +117,10 @@ class AttendanceViewModel(
 
 
     init {
+
+        viewModelScope.launch {
+            uiState.collect(::persistRestorableState)
+        }
 
         networkMonitor?.let { monitor ->
 
@@ -905,6 +922,10 @@ class AttendanceViewModel(
 
 
     companion object {
+        private const val KEY_SELECTED_DATE = "attendance.selected_date"
+        private const val KEY_SELECTED_COURSE_ID = "attendance.selected_course_id"
+        private const val KEY_SELECTED_SUBJECT_ID = "attendance.selected_subject_id"
+        private const val KEY_DETECTED_OCR_TEXT = "attendance.detected_ocr_text"
 
         private fun currentDate(): String = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
 
@@ -923,6 +944,16 @@ class AttendanceViewModel(
             return localDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
 
         }
+
+        private fun persistableText(value: String): String = value
+
+    }
+
+    private fun persistRestorableState(state: AttendanceUiState) {
+        savedStateHandle[KEY_SELECTED_DATE] = state.selectedDate
+        savedStateHandle[KEY_SELECTED_COURSE_ID] = state.selectedCourseId
+        savedStateHandle[KEY_SELECTED_SUBJECT_ID] = state.selectedSubjectId
+        savedStateHandle[KEY_DETECTED_OCR_TEXT] = persistableText(state.detectedOcrText)
 
     }
 

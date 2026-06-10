@@ -66,7 +66,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.myapplication.core.di.AppModule
 import com.example.myapplication.domain.model.Incident
 import com.example.myapplication.domain.model.IncidentSeverity
@@ -91,7 +95,8 @@ fun IncidentScreenRoute(
     onBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val viewModel = remember(context) {
+    val viewModel: IncidentViewModel = viewModel(factory = viewModelFactory {
+        initializer {
         IncidentViewModel(
             getStudentsByCourseUseCase = AppModule.provideGetStudentsByCourseUseCase(context),
             catalogRepository = AppModule.provideCatalogRepository(context),
@@ -102,9 +107,11 @@ fun IncidentScreenRoute(
             recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context),
             networkMonitor = AppModule.provideNetworkMonitor(context),
             syncPreferences = AppModule.provideSyncPreferences(context),
-            syncRepository = AppModule.provideSyncRepository(context)
+            syncRepository = AppModule.provideSyncRepository(context),
+            savedStateHandle = createSavedStateHandle()
         )
-    }
+        }
+    })
     IncidentScreenContent(
         uiState = viewModel.uiState.collectAsStateWithLifecycle().value,
         onEvent = viewModel::onEvent,

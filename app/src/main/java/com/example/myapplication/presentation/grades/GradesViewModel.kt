@@ -1,6 +1,7 @@
 package com.example.myapplication.presentation.grades
 
 import android.net.Uri
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.core.network.NetworkMonitor
@@ -37,9 +38,18 @@ class GradesViewModel(
     private val sendParentTelegramUseCase: SendParentTelegramUseCase,
     private val networkMonitor: NetworkMonitor? = null,
     private val syncRepository: SyncRepository? = null,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
     initialState: GradesUiState = GradesUiState()
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(initialState)
+    private val _uiState = MutableStateFlow(
+        initialState.copy(
+            selectedCourseId = savedStateHandle[KEY_SELECTED_COURSE_ID],
+            selectedSubjectId = savedStateHandle[KEY_SELECTED_SUBJECT_ID],
+            selectedEvaluationTypeId = savedStateHandle[KEY_SELECTED_EVALUATION_TYPE_ID],
+            selectedPeriodId = savedStateHandle[KEY_SELECTED_PERIOD_ID],
+            detectedOcrText = savedStateHandle[KEY_DETECTED_OCR_TEXT] ?: initialState.detectedOcrText
+        )
+    )
     val uiState: StateFlow<GradesUiState> = _uiState.asStateFlow()
     private var observeJob: Job? = null
     private var subjectsJob: Job? = null
@@ -49,6 +59,9 @@ class GradesViewModel(
     private var hasPendingLocalEdits = false
 
     init {
+        viewModelScope.launch {
+            uiState.collect(::persistRestorableState)
+        }
         networkMonitor?.let { monitor ->
             viewModelScope.launch {
                 monitor.isOnline.collect { online ->
@@ -463,4 +476,20 @@ class GradesViewModel(
         students.map { student ->
             GradeStudentMock(id = student.id, name = student.fullName, score = null, status = GradeVisualStatus.NOT_REGISTERED)
         }
+
+    private fun persistRestorableState(state: GradesUiState) {
+        savedStateHandle[KEY_SELECTED_COURSE_ID] = state.selectedCourseId
+        savedStateHandle[KEY_SELECTED_SUBJECT_ID] = state.selectedSubjectId
+        savedStateHandle[KEY_SELECTED_EVALUATION_TYPE_ID] = state.selectedEvaluationTypeId
+        savedStateHandle[KEY_SELECTED_PERIOD_ID] = state.selectedPeriodId
+        savedStateHandle[KEY_DETECTED_OCR_TEXT] = state.detectedOcrText
+    }
+
+    private companion object {
+        const val KEY_SELECTED_COURSE_ID = "grades.selected_course_id"
+        const val KEY_SELECTED_SUBJECT_ID = "grades.selected_subject_id"
+        const val KEY_SELECTED_EVALUATION_TYPE_ID = "grades.selected_evaluation_type_id"
+        const val KEY_SELECTED_PERIOD_ID = "grades.selected_period_id"
+        const val KEY_DETECTED_OCR_TEXT = "grades.detected_ocr_text"
+    }
 }

@@ -1,6 +1,7 @@
 package com.example.myapplication.presentation.incidents
 
 import android.net.Uri
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.core.network.NetworkMonitor
@@ -42,15 +43,37 @@ class IncidentViewModel(
     private val recognizeTextFromImageUseCase: RecognizeTextFromImageUseCase,
     private val networkMonitor: NetworkMonitor? = null,
     private val syncPreferences: SyncPreferences? = null,
-    private val syncRepository: SyncRepository? = null
+    private val syncRepository: SyncRepository? = null,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle()
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(IncidentUiState())
+    private val _uiState = MutableStateFlow(
+        IncidentUiState(
+            selectedCourseId = savedStateHandle[KEY_SELECTED_COURSE_ID],
+            selectedStudentId = savedStateHandle[KEY_SELECTED_STUDENT_ID],
+            selectedIncidentTypeId = savedStateHandle[KEY_SELECTED_INCIDENT_TYPE_ID],
+            selectedSeverity = savedStateHandle.get<String>(KEY_SELECTED_SEVERITY)
+                ?.let { runCatching { IncidentSeverity.valueOf(it) }.getOrNull() }
+                ?: IncidentSeverity.MEDIUM,
+            description = savedStateHandle[KEY_DESCRIPTION] ?: "",
+            detectedOcrText = savedStateHandle[KEY_DETECTED_OCR_TEXT] ?: "",
+            showManualStudentForm = savedStateHandle[KEY_SHOW_MANUAL_STUDENT_FORM] ?: false,
+            manualStudentDraft = ManualStudentDraft(
+                fullName = savedStateHandle[KEY_MANUAL_STUDENT_FULL_NAME] ?: "",
+                grade = savedStateHandle[KEY_MANUAL_STUDENT_GRADE] ?: "",
+                section = savedStateHandle[KEY_MANUAL_STUDENT_SECTION] ?: "",
+                representativeName = savedStateHandle[KEY_MANUAL_REPRESENTATIVE_NAME] ?: ""
+            )
+        )
+    )
     val uiState: StateFlow<IncidentUiState> = _uiState.asStateFlow()
     private var observeJob: Job? = null
     private var studentsJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            uiState.collect(::persistRestorableState)
+        }
         networkMonitor?.let { monitor ->
             viewModelScope.launch {
                 monitor.isOnline.collect { online ->
@@ -880,6 +903,31 @@ class IncidentViewModel(
         private const val MIN_STUDENT_NAME_LENGTH = 5
         private const val MIN_STUDENT_MATCH_SCORE = 0.78
         private const val MIN_TOKEN_LENGTH = 3
+        private const val KEY_SELECTED_COURSE_ID = "incidents.selected_course_id"
+        private const val KEY_SELECTED_STUDENT_ID = "incidents.selected_student_id"
+        private const val KEY_SELECTED_INCIDENT_TYPE_ID = "incidents.selected_incident_type_id"
+        private const val KEY_SELECTED_SEVERITY = "incidents.selected_severity"
+        private const val KEY_DESCRIPTION = "incidents.description"
+        private const val KEY_DETECTED_OCR_TEXT = "incidents.detected_ocr_text"
+        private const val KEY_SHOW_MANUAL_STUDENT_FORM = "incidents.show_manual_student_form"
+        private const val KEY_MANUAL_STUDENT_FULL_NAME = "incidents.manual_student_full_name"
+        private const val KEY_MANUAL_STUDENT_GRADE = "incidents.manual_student_grade"
+        private const val KEY_MANUAL_STUDENT_SECTION = "incidents.manual_student_section"
+        private const val KEY_MANUAL_REPRESENTATIVE_NAME = "incidents.manual_representative_name"
+    }
+
+    private fun persistRestorableState(state: IncidentUiState) {
+        savedStateHandle[KEY_SELECTED_COURSE_ID] = state.selectedCourseId
+        savedStateHandle[KEY_SELECTED_STUDENT_ID] = state.selectedStudentId
+        savedStateHandle[KEY_SELECTED_INCIDENT_TYPE_ID] = state.selectedIncidentTypeId
+        savedStateHandle[KEY_SELECTED_SEVERITY] = state.selectedSeverity.name
+        savedStateHandle[KEY_DESCRIPTION] = state.description
+        savedStateHandle[KEY_DETECTED_OCR_TEXT] = state.detectedOcrText
+        savedStateHandle[KEY_SHOW_MANUAL_STUDENT_FORM] = state.showManualStudentForm
+        savedStateHandle[KEY_MANUAL_STUDENT_FULL_NAME] = state.manualStudentDraft.fullName
+        savedStateHandle[KEY_MANUAL_STUDENT_GRADE] = state.manualStudentDraft.grade
+        savedStateHandle[KEY_MANUAL_STUDENT_SECTION] = state.manualStudentDraft.section
+        savedStateHandle[KEY_MANUAL_REPRESENTATIVE_NAME] = state.manualStudentDraft.representativeName
     }
 }
 
