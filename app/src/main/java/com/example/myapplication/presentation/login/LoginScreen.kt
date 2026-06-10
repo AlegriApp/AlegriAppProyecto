@@ -46,7 +46,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.myapplication.core.di.AppModule
 import com.example.myapplication.ui.theme.MyApplicationTheme
 
@@ -55,12 +59,15 @@ fun LoginScreenRoute(
     onLoginSuccess: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val viewModel = remember(context) {
+    val viewModel: LoginViewModel = viewModel(factory = viewModelFactory {
+        initializer {
         LoginViewModel(
             loginUseCase = AppModule.provideLoginUseCase(context),
-            authRepository = AppModule.provideAuthRepository(context)
+            authRepository = AppModule.provideAuthRepository(context),
+            savedStateHandle = createSavedStateHandle()
         )
-    }
+        }
+    })
 
     LoginScreen(
         viewModel = viewModel,

@@ -44,7 +44,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.myapplication.core.di.AppModule
 import com.example.myapplication.presentation.common.OfflineBanner
 import com.example.myapplication.presentation.grades.components.GradeFilterSection
@@ -59,7 +63,8 @@ fun GradesScreen(
     onOpenDetail: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val viewModel = remember(context) {
+    val viewModel: GradesViewModel = viewModel(factory = viewModelFactory {
+        initializer {
         GradesViewModel(
             getStudentsByCourseUseCase = AppModule.provideGetStudentsByCourseUseCase(context),
             getGradesByCatalogFiltersUseCase = AppModule.provideGetGradesByCatalogFiltersUseCase(context),
@@ -68,9 +73,11 @@ fun GradesScreen(
             recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context),
             sendParentTelegramUseCase = AppModule.provideSendParentTelegramUseCase(context),
             networkMonitor = AppModule.provideNetworkMonitor(context),
-            syncRepository = AppModule.provideSyncRepository(context)
+            syncRepository = AppModule.provideSyncRepository(context),
+            savedStateHandle = createSavedStateHandle()
         )
-    }
+        }
+    })
     GradesScreenContent(
         viewModel = viewModel,
         onBack = onBack,
@@ -84,7 +91,8 @@ fun GradesScreenRoute(
     onOpenDetail: (Long, String, String) -> Unit = { _, _, _ -> }
 ) {
     val context = LocalContext.current
-    val viewModel = remember(context) {
+    val viewModel: GradesViewModel = viewModel(factory = viewModelFactory {
+        initializer {
         GradesViewModel(
             getStudentsByCourseUseCase = AppModule.provideGetStudentsByCourseUseCase(context),
             getGradesByCatalogFiltersUseCase = AppModule.provideGetGradesByCatalogFiltersUseCase(context),
@@ -93,9 +101,11 @@ fun GradesScreenRoute(
             recognizeTextFromImageUseCase = AppModule.provideRecognizeTextFromImageUseCase(context),
             sendParentTelegramUseCase = AppModule.provideSendParentTelegramUseCase(context),
             networkMonitor = AppModule.provideNetworkMonitor(context),
-            syncRepository = AppModule.provideSyncRepository(context)
+            syncRepository = AppModule.provideSyncRepository(context),
+            savedStateHandle = createSavedStateHandle()
         )
-    }
+        }
+    })
     GradesScreenContent(
         viewModel = viewModel,
         onBack = onBack,
