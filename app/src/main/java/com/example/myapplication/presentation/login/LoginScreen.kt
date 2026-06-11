@@ -23,6 +23,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -52,6 +53,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.myapplication.core.di.AppModule
+import com.example.myapplication.presentation.common.OfflineBanner
 import com.example.myapplication.ui.theme.MyApplicationTheme
 
 @Composable
@@ -59,15 +61,18 @@ fun LoginScreenRoute(
     onLoginSuccess: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val viewModel: LoginViewModel = viewModel(factory = viewModelFactory {
-        initializer {
-        LoginViewModel(
-            loginUseCase = AppModule.provideLoginUseCase(context),
-            authRepository = AppModule.provideAuthRepository(context),
-            savedStateHandle = createSavedStateHandle()
-        )
+    val viewModel: LoginViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                LoginViewModel(
+                    loginUseCase = AppModule.provideLoginUseCase(context),
+                    authRepository = AppModule.provideAuthRepository(context),
+                    networkMonitor = AppModule.provideNetworkMonitor(context),
+                    savedStateHandle = createSavedStateHandle()
+                )
+            }
         }
-    })
+    )
 
     LoginScreen(
         viewModel = viewModel,
@@ -138,9 +143,19 @@ fun LoginScreen(
                             color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
-                            text = "Accede con tu correo institucional para entrar a los módulos académicos.",
+                            text = "Ingresa con tu cuenta para acceder a los módulos académicos.",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                if (uiState.isOffline) {
+                    item {
+                        OfflineBanner(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .widthIn(max = 560.dp)
                         )
                     }
                 }
@@ -226,7 +241,7 @@ fun LoginScreen(
                             Button(
                                 onClick = viewModel::submit,
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = !uiState.isLoading
+                                enabled = !uiState.isLoading && !uiState.isOffline
                             ) {
                                 Text(
                                     if (uiState.isLoading) {
@@ -237,11 +252,11 @@ fun LoginScreen(
                                 )
                             }
 
-                            Text(
-                                text = "El login usa la tabla usuarios del backend definida en tus scripts SQL.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            if (uiState.isLoading) {
+                                LinearProgressIndicator(
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     }
                 }
@@ -257,7 +272,8 @@ private fun LoginScreenPreview() {
         LoginScreen(
             viewModel = LoginViewModel(
                 loginUseCase = AppModule.provideLoginUseCase(LocalContext.current),
-                authRepository = AppModule.provideAuthRepository(LocalContext.current)
+                authRepository = AppModule.provideAuthRepository(LocalContext.current),
+                networkMonitor = AppModule.provideNetworkMonitor(LocalContext.current)
             )
         )
     }
