@@ -6,6 +6,7 @@ import com.example.myapplication.data.remote.api.SupabaseApiService
 import com.example.myapplication.data.remote.dto.UsuarioRemoteDto
 import com.example.myapplication.domain.model.AuthSession
 import com.example.myapplication.domain.repository.AuthRepository
+import java.io.IOException
 import java.security.MessageDigest
 import kotlinx.coroutines.flow.Flow
 
@@ -25,7 +26,7 @@ class AuthRepositoryImpl(
         }
 
         val api = supabaseApi ?: return ResultState.Error(
-            "Supabase no está configurado. Revisa SUPABASE_URL y SUPABASE_KEY."
+            "El servicio no está disponible en este momento."
         )
 
         return runCatching {
@@ -34,13 +35,13 @@ class AuthRepositoryImpl(
         }.fold(
             onSuccess = { user ->
                 when {
-                    user == null -> ResultState.Error("Credenciales inválidas.")
+                    user == null -> ResultState.Error("Correo o contraseña incorrectos.")
                     !user.estado.equals("activo", ignoreCase = true) ->
-                        ResultState.Error("Este usuario no está activo.")
+                        ResultState.Error("Tu cuenta no está habilitada para ingresar.")
                     !PasswordVerifier.matches(
                         plainText = normalizedPassword,
                         storedHash = user.passwordHash
-                    ) -> ResultState.Error("Credenciales inválidas.")
+                    ) -> ResultState.Error("Correo o contraseña incorrectos.")
                     else -> {
                         val session = user.toSession()
                         authPreferences.saveSession(session)
@@ -50,7 +51,7 @@ class AuthRepositoryImpl(
             },
             onFailure = { error ->
                 ResultState.Error(
-                    message = error.message ?: "No se pudo iniciar sesión.",
+                    message = error.toLoginMessage(),
                     cause = error
                 )
             }
@@ -70,6 +71,12 @@ class AuthRepositoryImpl(
         email = email,
         roleName = roles?.nombre
     )
+
+    private fun Throwable.toLoginMessage(): String = when (this) {
+        is IOException -> "No se pudo conectar. Revisa tu internet e inténtalo de nuevo."
+        else -> message?.takeIf { it.isNotBlank() }
+            ?: "No pudimos iniciar sesión. Inténtalo nuevamente."
+    }
 }
 
 private object PasswordVerifier {

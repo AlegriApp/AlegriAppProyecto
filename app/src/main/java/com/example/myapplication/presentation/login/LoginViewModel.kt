@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.core.common.ResultState
+import com.example.myapplication.core.network.NetworkMonitor
 import com.example.myapplication.domain.repository.AuthRepository
 import com.example.myapplication.domain.usecase.auth.LoginUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.launch
 class LoginViewModel(
     private val loginUseCase: LoginUseCase,
     private val authRepository: AuthRepository,
+    private val networkMonitor: NetworkMonitor? = null,
     private val savedStateHandle: SavedStateHandle = SavedStateHandle()
 ) : ViewModel() {
 
@@ -29,6 +31,15 @@ class LoginViewModel(
     init {
         viewModelScope.launch {
             uiState.collect(::persistDraftState)
+        }
+        networkMonitor?.let { monitor ->
+            viewModelScope.launch {
+                monitor.isOnline.collect { online ->
+                    _uiState.update { state ->
+                        state.copy(isOffline = !online)
+                    }
+                }
+            }
         }
         viewModelScope.launch {
             authRepository.observeSession().collect { session ->
@@ -68,8 +79,18 @@ class LoginViewModel(
     }
 
     fun submit() {
-        val email = _uiState.value.email.trim()
-        val password = _uiState.value.password
+        val currentState = _uiState.value
+        val email = currentState.email.trim()
+        val password = currentState.password
+
+        if (currentState.isOffline) {
+            _uiState.update {
+                it.copy(
+                    errorMessage = "No hay conexión a internet. Revisa tu red e inténtalo de nuevo."
+                )
+            }
+            return
+        }
 
         val emailError = when {
             email.isBlank() -> "Ingresa tu correo."
