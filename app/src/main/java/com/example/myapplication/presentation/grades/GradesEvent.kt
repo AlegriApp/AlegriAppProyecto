@@ -2,7 +2,7 @@ package com.example.myapplication.presentation.grades
 
 import android.net.Uri
 
-sealed interface GradesEvent {
+sealed interface    GradesEvent {
     data object LoadData : GradesEvent
     data class CourseSelected(val courseId: Long) : GradesEvent
     data class SubjectSelected(val subjectId: Long) : GradesEvent

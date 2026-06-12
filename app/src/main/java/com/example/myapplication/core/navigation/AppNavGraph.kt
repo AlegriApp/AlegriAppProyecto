@@ -1,11 +1,10 @@
 package com.example.myapplication.core.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.navigation.NavType
+import androidx.navigation.toRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.example.myapplication.presentation.attendance.AttendanceScreenRoute
 import com.example.myapplication.presentation.grades.GradeDetailScreen
 import com.example.myapplication.presentation.grades.GradesScreenRoute
@@ -19,55 +18,52 @@ fun AppNavGraph() {
 
     NavHost(
         navController = navController,
-        startDestination = AppRoutes.Login
+        startDestination = Login
     ) {
-        composable(AppRoutes.Login) {
+        composable<Login> {
             LoginScreenRoute(
                 onLoginSuccess = {
-                    navController.navigate(AppRoutes.Home) {
-                        popUpTo(AppRoutes.Login) { inclusive = true }
+                    navController.navigate(Home) {
+                        popUpTo<Login> { inclusive = true }
                         launchSingleTop = true
                     }
                 }
             )
         }
 
-        composable(AppRoutes.Home) {
+        composable<Home> {
             HomeScreen(
-                onOpenAttendance = { navController.navigate(AppRoutes.Attendance) },
-                onOpenGrades = { navController.navigate(AppRoutes.Grades) },
-                onOpenIncidents = { navController.navigate(AppRoutes.Incidents) }
+                onOpenAttendance = { navController.navigate(Attendance) },
+                onOpenGrades = { navController.navigate(Grades) },
+                onOpenIncidents = { navController.navigate(Incidents) }
             )
         }
 
-        composable(AppRoutes.Attendance) {
+        composable<Attendance> {
             AttendanceScreenRoute(
                 onBack = { navController.popBackStack() }
             )
         }
 
-        composable(AppRoutes.Grades) {
+        composable<Grades> {
             GradesScreenRoute(
                 onBack = { navController.popBackStack() },
                 onOpenDetail = { studentId, _, _ ->
-                    navController.navigate(AppRoutes.gradeDetail(studentId))
+                    navController.navigate(GradeDetail(studentId))
                 }
             )
         }
 
-        composable(AppRoutes.Incidents) {
+        composable<Incidents> {
             IncidentScreenRoute(
                 onBack = { navController.popBackStack() }
             )
         }
 
-        composable(
-            route = AppRoutes.GradeDetail,
-            arguments = listOf(navArgument("studentId") { type = NavType.LongType })
-        ) { backStackEntry ->
-            val studentId = backStackEntry.arguments?.getLong("studentId") ?: 0L
+        composable<GradeDetail> { backStackEntry ->
+            val route = backStackEntry.toRoute<GradeDetail>()
             GradeDetailScreen(
-                studentId = studentId,
+                studentId = route.studentId,
                 onBack = { navController.popBackStack() }
             )
         }
