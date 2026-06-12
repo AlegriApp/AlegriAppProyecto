@@ -1,12 +1,25 @@
 package com.example.myapplication.core.navigation
 
-object AppRoutes {
-    const val Login = "login"
-    const val Home = "home"
-    const val Attendance = "attendance"
-    const val Grades = "grades"
-    const val Incidents = "incidents"
-    const val GradeDetail = "grades_detail/{studentId}"
+import kotlinx.serialization.Serializable
 
-    fun gradeDetail(studentId: Long): String = "grades_detail/$studentId"
-}
+sealed interface AppRoute
+
+@Serializable
+data object Login : AppRoute
+
+@Serializable
+data object Home : AppRoute
+
+@Serializable
+data object Attendance : AppRoute
+
+@Serializable
+data object Grades : AppRoute
+
+@Serializable
+data object Incidents : AppRoute
+
+@Serializable
+data class GradeDetail(
+    val studentId: Long
+) : AppRoute
