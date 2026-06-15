@@ -9,6 +9,7 @@ import com.example.myapplication.data.local.migrations.Migration_5_6
 import com.example.myapplication.data.local.migrations.Migration_6_7
 import com.example.myapplication.data.local.migrations.Migration_7_8
 import com.example.myapplication.data.local.migrations.Migration_8_9
+import com.example.myapplication.data.local.migrations.Migration_9_10
 import com.example.myapplication.data.repository.CatalogRepositoryImpl
 import com.example.myapplication.domain.repository.CatalogRepository
 import com.example.myapplication.domain.usecase.attendance.GetAttendanceByDateAndCourseUseCase
@@ -28,6 +29,7 @@ import com.example.myapplication.data.repository.OcrRepositoryImpl
 import com.example.myapplication.data.repository.StudentRepositoryImpl
 import com.example.myapplication.data.repository.SyncRepositoryImpl
 import com.example.myapplication.data.repository.TelegramRepositoryImpl
+import com.example.myapplication.data.repository.TeacherDataSyncer
 import com.example.myapplication.data.remote.api.TelegramApiService
 import com.example.myapplication.domain.repository.SyncRepository
 import com.example.myapplication.domain.repository.AttendanceRepository
@@ -87,6 +89,9 @@ object AppModule {
     @Volatile
     private var authRepository: AuthRepository? = null
 
+    @Volatile
+    private var teacherDataSyncer: TeacherDataSyncer? = null
+
     fun provideDatabase(context: Context): AppDatabase =
         db ?: synchronized(this) {
             db ?: Room.databaseBuilder(
@@ -94,7 +99,7 @@ object AppModule {
                 AppDatabase::class.java,
                 "alegriapp.db"
             )
-                .addMigrations(Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9)
+                .addMigrations(Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10)
                 // Solo v1–v4 sin migración definida. No incluir 5 ni 6: chocan con Migration_5_6 / Migration_6_7.
                 .fallbackToDestructiveMigrationFrom(1, 2, 3, 4)
                 .fallbackToDestructiveMigrationOnDowngrade()
@@ -140,15 +145,27 @@ object AppModule {
             catalogRepository ?: CatalogRepositoryImpl(
                 supabaseApi = provideSupabaseApiService(),
                 catalogDao = provideDatabase(context).catalogDao(),
-                studentDao = provideDatabase(context).studentDao()
+                studentDao = provideDatabase(context).studentDao(),
+                authPreferences = provideAuthPreferences(context)
             ).also { catalogRepository = it }
+        }
+
+    fun provideTeacherDataSyncer(context: Context): TeacherDataSyncer =
+        teacherDataSyncer ?: synchronized(this) {
+            val database = provideDatabase(context)
+            teacherDataSyncer ?: TeacherDataSyncer(
+                supabaseApi = provideSupabaseApiService(),
+                catalogDao = database.catalogDao(),
+                studentDao = database.studentDao()
+            ).also { teacherDataSyncer = it }
         }
 
     fun provideAuthRepository(context: Context): AuthRepository =
         authRepository ?: synchronized(this) {
             authRepository ?: AuthRepositoryImpl(
                 supabaseApi = provideSupabaseApiService(),
-                authPreferences = provideAuthPreferences(context)
+                authPreferences = provideAuthPreferences(context),
+                teacherDataSyncer = provideTeacherDataSyncer(context)
             ).also { authRepository = it }
         }
 
@@ -162,13 +179,16 @@ object AppModule {
             incidentDao = database.incidentDao(),
             catalogDao = database.catalogDao(),
             catalogRepository = provideCatalogRepository(context),
-            networkMonitor = provideNetworkMonitor(context)
+            networkMonitor = provideNetworkMonitor(context),
+            authPreferences = provideAuthPreferences(context),
+            teacherDataSyncer = provideTeacherDataSyncer(context)
         )
     }
 
     fun provideStudentRepository(context: Context): StudentRepository =
         StudentRepositoryImpl(
-            studentDao = provideDatabase(context).studentDao()
+            studentDao = provideDatabase(context).studentDao(),
+            authPreferences = provideAuthPreferences(context)
         )
 
     fun provideAttendanceRepository(context: Context): AttendanceRepository =

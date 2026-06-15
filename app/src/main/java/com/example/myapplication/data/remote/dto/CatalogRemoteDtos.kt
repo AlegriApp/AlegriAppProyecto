@@ -67,3 +67,13 @@ data class RepresentanteRemoteDto(
     val apellido: String? = null,
     @SerializedName("configuracion_telegram") val configuracionTelegram: List<ConfiguracionTelegramRemoteDto>? = null
 )
+
+data class DocenteCursoRemoteDto(
+    @SerializedName("docente_id") val docenteId: Long,
+    @SerializedName("curso_id") val cursoId: Long,
+    @SerializedName("materia_id") val materiaId: Long? = null,
+    @SerializedName("es_tutor") val esTutor: Boolean? = null,
+    val estado: String? = null,
+    @SerializedName("deleted_at") val deletedAt: String? = null,
+    val cursos: CursoCatalogRemoteDto? = null
+)

@@ -58,6 +58,22 @@ data class StudentCourseEntity(
 )
 
 @Entity(
+    tableName = "teacher_courses",
+    indices = [
+        Index(value = ["teacher_id"]),
+        Index(value = ["course_id"]),
+        Index(value = ["teacher_id", "course_id"])
+    ]
+)
+data class TeacherCourseEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "teacher_id") val teacherId: Long,
+    @ColumnInfo(name = "course_id") val courseId: Long,
+    @ColumnInfo(name = "materia_id") val subjectId: Long? = null,
+    @ColumnInfo(name = "es_tutor") val isTutor: Boolean = false
+)
+
+@Entity(
     tableName = "student_representatives",
     indices = [
         Index(value = ["student_id"]),

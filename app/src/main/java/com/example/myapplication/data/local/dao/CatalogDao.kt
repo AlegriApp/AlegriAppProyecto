@@ -10,6 +10,7 @@ import com.example.myapplication.data.local.entity.PeriodoAcademicoCatalogEntity
 import com.example.myapplication.data.local.entity.StudentCourseEntity
 import com.example.myapplication.data.local.entity.StudentRepresentativeEntity
 import com.example.myapplication.data.local.entity.TelegramConfigEntity
+import com.example.myapplication.data.local.entity.TeacherCourseEntity
 import com.example.myapplication.data.local.entity.TipoEvaluacionCatalogEntity
 import com.example.myapplication.data.local.entity.TipoIncidenteCatalogEntity
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +20,14 @@ interface CatalogDao {
 
     @Query("SELECT * FROM catalog_cursos ORDER BY nombre ASC, paralelo ASC")
     fun observeCursos(): Flow<List<CursoCatalogEntity>>
+
+    @Query(
+        "SELECT DISTINCT c.* FROM catalog_cursos c " +
+            "INNER JOIN teacher_courses tc ON tc.course_id = c.id " +
+            "WHERE tc.teacher_id = :teacherId " +
+            "ORDER BY c.nombre ASC, c.paralelo ASC"
+    )
+    fun observeCursosForTeacher(teacherId: Long): Flow<List<CursoCatalogEntity>>
 
     @Query("SELECT * FROM catalog_materias WHERE curso_id = :courseId ORDER BY nombre ASC")
     fun observeMateriasByCourse(courseId: Long): Flow<List<MateriaCatalogEntity>>
@@ -65,6 +74,9 @@ interface CatalogDao {
     suspend fun replaceStudentCourses(items: List<StudentCourseEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun replaceTeacherCourses(items: List<TeacherCourseEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun replaceStudentRepresentatives(items: List<StudentRepresentativeEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -73,9 +85,18 @@ interface CatalogDao {
     @Query("DELETE FROM student_courses")
     suspend fun clearStudentCourses()
 
+    @Query("DELETE FROM student_courses WHERE course_id IN (:courseIds)")
+    suspend fun deleteStudentCoursesForCourses(courseIds: List<Long>)
+
+    @Query("DELETE FROM teacher_courses WHERE teacher_id = :teacherId")
+    suspend fun deleteTeacherCoursesForTeacher(teacherId: Long)
+
     @Query("DELETE FROM student_representatives")
     suspend fun clearStudentRepresentatives()
 
     @Query("SELECT COUNT(*) FROM catalog_cursos")
     suspend fun countCursos(): Int
+
+    @Query("SELECT COUNT(*) FROM teacher_courses WHERE teacher_id = :teacherId")
+    suspend fun countTeacherCoursesForTeacher(teacherId: Long): Int
 }
