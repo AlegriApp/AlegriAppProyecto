@@ -20,9 +20,7 @@ object TelegramMessageBuilder {
         subjectName: String = ""
     ): String {
         val present = records.count { it.second.status == AttendanceStatus.PRESENT }
-        val late = records.count { it.second.status == AttendanceStatus.LATE }
         val absent = records.count { it.second.status == AttendanceStatus.ABSENT }
-        val justified = records.count { it.second.status == AttendanceStatus.JUSTIFIED }
         val message = buildString {
             appendLine("AlegriAPP - Reporte de Asistencia")
             appendLine("Curso: ${sanitize(courseName)}")
@@ -31,9 +29,7 @@ object TelegramMessageBuilder {
             }
             appendLine("Fecha: ${humanDate(date)}")
             appendLine("Presentes: $present")
-            appendLine("Tardanzas: $late")
             appendLine("Ausentes: $absent")
-            appendLine("Justificados: $justified")
             appendLine()
             appendLine("Detalle:")
             records.forEach { (student, attendance) ->
@@ -176,9 +172,7 @@ object TelegramMessageBuilder {
 
     private fun attendanceStatusLabel(status: AttendanceStatus): String = when (status) {
         AttendanceStatus.PRESENT -> "Presente"
-        AttendanceStatus.LATE -> "Atrasado"
         AttendanceStatus.ABSENT -> "Ausente"
-        AttendanceStatus.JUSTIFIED -> "Justificado"
         AttendanceStatus.UNMARKED -> "Sin marcar"
     }
 }

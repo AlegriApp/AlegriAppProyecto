@@ -64,8 +64,16 @@ class AttendanceTranscriptionService {
                 "ausente",
                 "ausentes"
             ) -> AttendanceStatus.ABSENT
-            containsAny(normalized, "justificado", "permiso", "excusa") -> AttendanceStatus.JUSTIFIED
-            containsAny(normalized, "tardanza", "tarde", "atrasado", "llego tarde") -> AttendanceStatus.LATE
+            containsAny(
+                normalized,
+                "justificado",
+                "permiso",
+                "excusa",
+                "tardanza",
+                "tarde",
+                "atrasado",
+                "llego tarde"
+            ) -> AttendanceStatus.ABSENT
             containsAny(normalized, "presente", "presentes", "asistio", "asistieron", "vino", "vinieron", "ok", "si") -> AttendanceStatus.PRESENT
             else -> null
         }

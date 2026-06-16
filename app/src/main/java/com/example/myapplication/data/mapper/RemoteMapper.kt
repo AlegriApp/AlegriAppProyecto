@@ -153,17 +153,14 @@ fun GradeEntity.toCalificacionInsertDto(
 
 private fun String.toRemoteAttendanceStatus(): String = when (this.lowercase()) {
     "presente", "present" -> "presente"
-    "atrasado", "late" -> "atrasado"
     "ausente", "absent" -> "ausente"
-    "justificado", "justified" -> "justificado"
+    "atrasado", "late", "justificado", "justified" -> "ausente"
     else -> "presente"
 }
 
 fun AttendanceStatus.toRemoteStatus(): String = when (this) {
     AttendanceStatus.PRESENT -> "presente"
-    AttendanceStatus.LATE -> "atrasado"
     AttendanceStatus.ABSENT -> "ausente"
-    AttendanceStatus.JUSTIFIED -> "justificado"
     AttendanceStatus.UNMARKED -> "ausente"
 }
 

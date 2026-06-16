@@ -22,11 +22,12 @@ class AuthRepositoryImpl(
         val normalizedPassword = password.trim()
 
         if (normalizedEmail.isBlank() || normalizedPassword.isBlank()) {
-            return ResultState.Error("Completa tu correo y tu contraseña.")
+            return ResultState.Error("Completa tu correo y tu contrasena.")
         }
 
-        val api = supabaseApi ?: return ResultState.Error(
-            "El servicio no está disponible en este momento."
+        val api = supabaseApi ?: return loginWithLocalFallback(
+            email = normalizedEmail,
+            password = normalizedPassword
         )
 
         return runCatching {
@@ -35,13 +36,13 @@ class AuthRepositoryImpl(
         }.fold(
             onSuccess = { user ->
                 when {
-                    user == null -> ResultState.Error("Correo o contraseña incorrectos.")
+                    user == null -> ResultState.Error("Correo o contrasena incorrectos.")
                     !user.estado.equals("activo", ignoreCase = true) ->
-                        ResultState.Error("Tu cuenta no está habilitada para ingresar.")
+                        ResultState.Error("Tu cuenta no esta habilitada para ingresar.")
                     !PasswordVerifier.matches(
                         plainText = normalizedPassword,
                         storedHash = user.passwordHash
-                    ) -> ResultState.Error("Correo o contraseña incorrectos.")
+                    ) -> ResultState.Error("Correo o contrasena incorrectos.")
                     else -> {
                         val session = user.toSession()
                         authPreferences.saveSession(session)
@@ -62,6 +63,27 @@ class AuthRepositoryImpl(
         authPreferences.clearSession()
     }
 
+    private suspend fun loginWithLocalFallback(
+        email: String,
+        password: String
+    ): ResultState<AuthSession> {
+        if (email == DEMO_EMAIL && password == DEMO_PASSWORD) {
+            val session = AuthSession(
+                userId = DEMO_USER_ID,
+                fullName = DEMO_FULL_NAME,
+                email = DEMO_EMAIL,
+                roleName = DEMO_ROLE
+            )
+            authPreferences.saveSession(session)
+            return ResultState.Success(session)
+        }
+
+        return ResultState.Error(
+            "No se pudo iniciar sesion porque falta configurar Supabase. " +
+                "Agrega SUPABASE_KEY en local.properties y recompila la app."
+        )
+    }
+
     private fun UsuarioRemoteDto.toSession(): AuthSession = AuthSession(
         userId = id,
         fullName = listOf(nombre, apellido)
@@ -73,9 +95,17 @@ class AuthRepositoryImpl(
     )
 
     private fun Throwable.toLoginMessage(): String = when (this) {
-        is IOException -> "No se pudo conectar. Revisa tu internet e inténtalo de nuevo."
+        is IOException -> "No se pudo conectar. Revisa tu internet e intentalo de nuevo."
         else -> message?.takeIf { it.isNotBlank() }
-            ?: "No pudimos iniciar sesión. Inténtalo nuevamente."
+            ?: "No pudimos iniciar sesion. Intentalo nuevamente."
+    }
+
+    private companion object {
+        const val DEMO_USER_ID = -1L
+        const val DEMO_EMAIL = "docente@alegriapp.com"
+        const val DEMO_PASSWORD = "1234"
+        const val DEMO_FULL_NAME = "Kelvin Docente"
+        const val DEMO_ROLE = "Docente"
     }
 }
 

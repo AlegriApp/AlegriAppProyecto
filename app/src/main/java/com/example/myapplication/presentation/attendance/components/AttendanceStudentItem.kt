@@ -8,10 +8,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -70,36 +68,12 @@ fun AttendanceStudentItem(
             )
             AttendanceActionButton(
                 modifier = Modifier.weight(1f),
-                text = "Tardanza",
-                icon = Icons.Filled.AccessTime,
-                selected = selectedStatus == AttendanceStatus.LATE,
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                onClick = { onStatusSelected(AttendanceStatus.LATE) }
-            )
-            AttendanceActionButton(
-                modifier = Modifier.weight(1f),
                 text = "Ausente",
                 icon = Icons.Filled.Cancel,
                 selected = selectedStatus == AttendanceStatus.ABSENT,
                 containerColor = MaterialTheme.colorScheme.errorContainer,
                 contentColor = MaterialTheme.colorScheme.onErrorContainer,
                 onClick = { onStatusSelected(AttendanceStatus.ABSENT) }
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            AttendanceActionButton(
-                modifier = Modifier.fillMaxWidth(),
-                text = "Justificado",
-                icon = Icons.Filled.Description,
-                selected = selectedStatus == AttendanceStatus.JUSTIFIED,
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                onClick = { onStatusSelected(AttendanceStatus.JUSTIFIED) }
             )
         }
     }

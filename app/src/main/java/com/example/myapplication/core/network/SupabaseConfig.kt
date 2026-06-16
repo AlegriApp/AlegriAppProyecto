@@ -43,7 +43,7 @@ object SupabaseConfig {
             "updated_at,deleted_at"
 
     /** Estados válidos según CHECK en asistencias.estado */
-    val ATTENDANCE_STATUSES = setOf("presente", "ausente", "atrasado", "justificado")
+    val ATTENDANCE_STATUSES = setOf("presente", "ausente")
 
     /** Estados válidos según CHECK en calificaciones.estado */
     val GRADE_STATUSES = setOf("registrado", "revisado", "publicado", "anulado")

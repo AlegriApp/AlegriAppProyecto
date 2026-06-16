@@ -218,11 +218,7 @@ class AttendanceViewModel(
 
             is AttendanceEvent.MarkPresent -> updateStatus(event.studentId, AttendanceStatus.PRESENT)
 
-            is AttendanceEvent.MarkLate -> updateStatus(event.studentId, AttendanceStatus.LATE)
-
             is AttendanceEvent.MarkAbsent -> updateStatus(event.studentId, AttendanceStatus.ABSENT)
-
-            is AttendanceEvent.MarkJustified -> updateStatus(event.studentId, AttendanceStatus.JUSTIFIED)
 
             AttendanceEvent.MarkAllPresent -> markAllPresent()
 

@@ -9,9 +9,7 @@ sealed interface AttendanceEvent {
     data class SubjectSelected(val subjectId: Long) : AttendanceEvent
     data class ChangeDate(val selectedDate: String) : AttendanceEvent
     data class MarkPresent(val studentId: Long) : AttendanceEvent
-    data class MarkLate(val studentId: Long) : AttendanceEvent
     data class MarkAbsent(val studentId: Long) : AttendanceEvent
-    data class MarkJustified(val studentId: Long) : AttendanceEvent
     data object MarkAllPresent : AttendanceEvent
     data object ClearMarks : AttendanceEvent
     data object SaveAttendance : AttendanceEvent
