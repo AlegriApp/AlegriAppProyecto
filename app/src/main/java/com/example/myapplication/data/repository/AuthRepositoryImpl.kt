@@ -5,6 +5,7 @@ import com.example.myapplication.core.preferences.AuthPreferences
 import com.example.myapplication.data.remote.api.SupabaseApiService
 import com.example.myapplication.data.remote.dto.UsuarioRemoteDto
 import com.example.myapplication.domain.model.AuthSession
+import com.example.myapplication.domain.model.sync.SyncOutcome
 import com.example.myapplication.domain.repository.AuthRepository
 import java.io.IOException
 import java.security.MessageDigest
@@ -12,7 +13,8 @@ import kotlinx.coroutines.flow.Flow
 
 class AuthRepositoryImpl(
     private val supabaseApi: SupabaseApiService?,
-    private val authPreferences: AuthPreferences
+    private val authPreferences: AuthPreferences,
+    private val teacherDataSyncer: TeacherDataSyncer
 ) : AuthRepository {
 
     override fun observeSession(): Flow<AuthSession?> = authPreferences.session
@@ -45,6 +47,15 @@ class AuthRepositoryImpl(
                     ) -> ResultState.Error("Correo o contrasena incorrectos.")
                     else -> {
                         val session = user.toSession()
+                        val preload = teacherDataSyncer.syncForTeacher(session.userId)
+                        if (preload is SyncOutcome.Failure &&
+                            !teacherDataSyncer.hasCachedTeacherData(session.userId)
+                        ) {
+                            return@fold ResultState.Error(
+                                "Credenciales correctas, pero no pudimos cargar tus cursos. " +
+                                    preload.message
+                            )
+                        }
                         authPreferences.saveSession(session)
                         ResultState.Success(session)
                     }

@@ -3,9 +3,11 @@ package com.example.myapplication.data.mapper
 import com.example.myapplication.data.local.entity.CursoCatalogEntity
 import com.example.myapplication.data.local.entity.MateriaCatalogEntity
 import com.example.myapplication.data.local.entity.PeriodoAcademicoCatalogEntity
+import com.example.myapplication.data.local.entity.TeacherCourseEntity
 import com.example.myapplication.data.local.entity.TipoEvaluacionCatalogEntity
 import com.example.myapplication.data.local.entity.TipoIncidenteCatalogEntity
 import com.example.myapplication.data.remote.dto.CursoCatalogRemoteDto
+import com.example.myapplication.data.remote.dto.DocenteCursoRemoteDto
 import com.example.myapplication.data.remote.dto.MateriaCatalogRemoteDto
 import com.example.myapplication.data.remote.dto.PeriodoAcademicoRemoteDto
 import com.example.myapplication.data.remote.dto.TipoEvaluacionRemoteDto
@@ -49,6 +51,14 @@ fun CursoCatalogRemoteDto.toEntity(): CursoCatalogEntity = CursoCatalogEntity(
     paralelo = paralelo.orEmpty(),
     anioLectivo = anioLectivo.orEmpty(),
     periodoAcademicoId = periodoAcademicoId
+)
+
+fun DocenteCursoRemoteDto.toEntity(): TeacherCourseEntity = TeacherCourseEntity(
+    id = "${docenteId}_${cursoId}_${materiaId ?: 0L}",
+    teacherId = docenteId,
+    courseId = cursoId,
+    subjectId = materiaId,
+    isTutor = esTutor == true
 )
 
 fun MateriaCatalogRemoteDto.toEntity(): MateriaCatalogEntity = MateriaCatalogEntity(

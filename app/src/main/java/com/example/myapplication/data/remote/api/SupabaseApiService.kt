@@ -7,6 +7,7 @@ import com.example.myapplication.data.remote.dto.CalificacionInsertDto
 import com.example.myapplication.data.remote.dto.CalificacionRemoteResponseDto
 import com.example.myapplication.data.remote.dto.ConfiguracionTelegramRemoteDto
 import com.example.myapplication.data.remote.dto.CursoCatalogRemoteDto
+import com.example.myapplication.data.remote.dto.DocenteCursoRemoteDto
 import com.example.myapplication.data.remote.dto.EstudianteCursoEnrollmentRemoteDto
 import com.example.myapplication.data.remote.dto.EstudianteRemoteDto
 import com.example.myapplication.data.remote.dto.IncidenteInsertDto
@@ -51,6 +52,14 @@ interface SupabaseApiService {
         @Query("deleted_at") deletedFilter: String = "is.null"
     ): List<CursoCatalogRemoteDto>
 
+    @GET(SupabaseConfig.CURSOS_TABLE)
+    suspend fun getCursosActivosByIds(
+        @Query("select") select: String = "id,nombre,paralelo,anio_lectivo,periodo_academico_id,estado",
+        @Query("id") idFilter: String,
+        @Query("estado") estadoFilter: String = "eq.activo",
+        @Query("deleted_at") deletedFilter: String = "is.null"
+    ): List<CursoCatalogRemoteDto>
+
     @GET(SupabaseConfig.MATERIAS_TABLE)
     suspend fun getMateriasActivas(
         @Query("select") select: String = "id,nombre,curso_id,estado",
@@ -83,11 +92,27 @@ interface SupabaseApiService {
         @Query("deleted_at") deletedFilter: String = "is.null"
     ): List<ConfiguracionTelegramRemoteDto>
 
+    @GET(SupabaseConfig.DOCENTE_CURSO_TABLE)
+    suspend fun getDocenteCursosActivos(
+        @Query("select") select: String = SupabaseConfig.DOCENTE_CURSO_SELECT,
+        @Query("docente_id") docenteFilter: String,
+        @Query("estado") estadoFilter: String = "eq.activo",
+        @Query("deleted_at") deletedFilter: String = "is.null"
+    ): List<DocenteCursoRemoteDto>
+
     // ---------- ESTUDIANTES (PULL) ----------
 
     @GET(SupabaseConfig.ESTUDIANTES_TABLE)
     suspend fun getEstudiantesActivos(
         @Query("select") select: String = SupabaseConfig.ESTUDIANTE_SELECT,
+        @Query("estado") estadoFilter: String = "eq.activo",
+        @Query("deleted_at") deletedFilter: String = "is.null"
+    ): List<EstudianteRemoteDto>
+
+    @GET(SupabaseConfig.ESTUDIANTES_TABLE)
+    suspend fun getEstudiantesActivosByIds(
+        @Query("select") select: String = SupabaseConfig.ESTUDIANTE_SELECT,
+        @Query("id") idFilter: String,
         @Query("estado") estadoFilter: String = "eq.activo",
         @Query("deleted_at") deletedFilter: String = "is.null"
     ): List<EstudianteRemoteDto>
@@ -104,6 +129,15 @@ interface SupabaseApiService {
     suspend fun getEstudianteCursosActivos(
         @Query("select") select: String = "estudiante_id,curso_id,estado",
         @Query("estado") estadoFilter: String = "eq.activo",
+        @Query("limit") limit: Int = 2000
+    ): List<EstudianteCursoEnrollmentRemoteDto>
+
+    @GET(SupabaseConfig.ESTUDIANTE_CURSO_TABLE)
+    suspend fun getEstudianteCursosActivosByCourses(
+        @Query("select") select: String = "estudiante_id,curso_id,estado,deleted_at",
+        @Query("curso_id") courseFilter: String,
+        @Query("estado") estadoFilter: String = "eq.activo",
+        @Query("deleted_at") deletedFilter: String = "is.null",
         @Query("limit") limit: Int = 2000
     ): List<EstudianteCursoEnrollmentRemoteDto>
 

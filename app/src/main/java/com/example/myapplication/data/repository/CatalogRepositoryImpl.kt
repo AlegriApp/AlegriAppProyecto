@@ -7,20 +7,31 @@ import com.example.myapplication.data.mapper.toDomain
 import com.example.myapplication.data.mapper.toEntity
 import com.example.myapplication.data.remote.api.SupabaseApiService
 import com.example.myapplication.data.remote.dto.ConfiguracionTelegramRemoteDto
+import com.example.myapplication.core.preferences.AuthPreferences
 import com.example.myapplication.domain.model.TelegramDestination
 import com.example.myapplication.domain.model.sync.SyncOutcome
 import com.example.myapplication.domain.repository.CatalogRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 
 class CatalogRepositoryImpl(
     private val supabaseApi: SupabaseApiService?,
     private val catalogDao: CatalogDao,
-    private val studentDao: StudentDao
+    private val studentDao: StudentDao,
+    private val authPreferences: AuthPreferences
 ) : CatalogRepository {
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeCourses(): Flow<List<com.example.myapplication.domain.model.CourseCatalog>> =
-        catalogDao.observeCursos().map { list -> list.map { it.toDomain() } }
+        authPreferences.session.flatMapLatest { session ->
+            if (session == null) {
+                catalogDao.observeCursos()
+            } else {
+                catalogDao.observeCursosForTeacher(session.userId)
+            }
+        }.map { list -> list.map { it.toDomain() } }
 
     override fun observeSubjectsByCourse(courseId: Long) =
         catalogDao.observeMateriasByCourse(courseId).map { list -> list.map { it.toDomain() } }

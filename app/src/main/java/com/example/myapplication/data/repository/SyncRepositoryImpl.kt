@@ -2,6 +2,7 @@ package com.example.myapplication.data.repository
 
 import com.example.myapplication.BuildConfig
 import com.example.myapplication.core.network.NetworkMonitor
+import com.example.myapplication.core.preferences.AuthPreferences
 import com.example.myapplication.data.local.dao.AttendanceDao
 import com.example.myapplication.data.local.dao.CatalogDao
 import com.example.myapplication.data.local.dao.GradeDao
@@ -20,6 +21,7 @@ import com.example.myapplication.data.remote.api.SupabaseApiService
 import com.example.myapplication.domain.model.sync.SyncOutcome
 import com.example.myapplication.domain.repository.CatalogRepository
 import com.example.myapplication.domain.repository.SyncRepository
+import kotlinx.coroutines.flow.firstOrNull
 
 /**
  * Implementación de sincronización Offline First.
@@ -52,7 +54,9 @@ class SyncRepositoryImpl(
     private val incidentDao: IncidentDao,
     private val catalogDao: CatalogDao,
     private val catalogRepository: CatalogRepository,
-    private val networkMonitor: NetworkMonitor
+    private val networkMonitor: NetworkMonitor,
+    private val authPreferences: AuthPreferences,
+    private val teacherDataSyncer: TeacherDataSyncer
 ) : SyncRepository {
 
     override suspend fun syncAll(): SyncOutcome {
@@ -92,6 +96,10 @@ class SyncRepositoryImpl(
             return SyncOutcome.Skipped("Sin conexión para sincronizar estudiantes.")
         }
         val api = supabaseApi ?: return SyncOutcome.Skipped("Supabase no configurado.")
+        val teacherId = authPreferences.session.firstOrNull()?.userId
+        if (teacherId != null) {
+            return teacherDataSyncer.syncForTeacher(teacherId)
+        }
 
         return runCatching {
             val remoteStudents = api.getEstudiantesActivos()
