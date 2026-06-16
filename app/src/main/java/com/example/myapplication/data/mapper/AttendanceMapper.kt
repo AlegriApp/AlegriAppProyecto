@@ -55,16 +55,13 @@ fun Attendance.toEntity(
 
 private fun String.toAttendanceStatus(): AttendanceStatus = when (lowercase()) {
     "presente", "present" -> AttendanceStatus.PRESENT
-    "atrasado", "late" -> AttendanceStatus.LATE
     "ausente", "absent" -> AttendanceStatus.ABSENT
-    "justificado", "justified" -> AttendanceStatus.JUSTIFIED
+    "atrasado", "late", "justificado", "justified" -> AttendanceStatus.ABSENT
     else -> AttendanceStatus.UNMARKED
 }
 
 private fun AttendanceStatus.toDatabaseStatus(): String = when (this) {
     AttendanceStatus.PRESENT -> "presente"
-    AttendanceStatus.LATE -> "atrasado"
     AttendanceStatus.ABSENT -> "ausente"
-    AttendanceStatus.JUSTIFIED -> "justificado"
     AttendanceStatus.UNMARKED -> error("No se puede persistir asistencia sin marcar")
 }

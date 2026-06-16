@@ -17,7 +17,6 @@ data class AttendanceUiState(
     val students: List<AttendanceStudentUi> = emptyList(),
     val attendanceByStudent: Map<Long, AttendanceStatus> = emptyMap(),
     val presentCount: Int = 0,
-    val lateCount: Int = 0,
     val absentCount: Int = 0,
     val unmarkedCount: Int = 0,
     val isLoading: Boolean = false,
@@ -36,7 +35,6 @@ data class AttendanceUiState(
     val summary: AttendanceSummary
         get() = AttendanceSummary(
             presentCount = presentCount,
-            lateCount = lateCount,
             absentCount = absentCount,
             unmarkedCount = unmarkedCount
         )
@@ -57,10 +55,7 @@ data class AttendanceUiState(
         }
         return copy(
             presentCount = statusValues.count { it == AttendanceStatus.PRESENT },
-            lateCount = statusValues.count { it == AttendanceStatus.LATE },
-            absentCount = statusValues.count {
-                it == AttendanceStatus.ABSENT || it == AttendanceStatus.JUSTIFIED
-            },
+            absentCount = statusValues.count { it == AttendanceStatus.ABSENT },
             unmarkedCount = statusValues.count { it == AttendanceStatus.UNMARKED }
         )
     }
@@ -85,7 +80,6 @@ data class AttendanceUiState(
                     state.isProcessingOcr,
                     state.detectedOcrText,
                     state.presentCount,
-                    state.lateCount,
                     state.absentCount,
                     state.unmarkedCount,
                     state.successMessage ?: "",
@@ -118,11 +112,10 @@ data class AttendanceUiState(
                     isProcessingOcr = restored[9] as Boolean,
                     detectedOcrText = restored[10] as String,
                     presentCount = restored[11] as Int,
-                    lateCount = restored[12] as Int,
-                    absentCount = restored[13] as Int,
-                    unmarkedCount = restored[14] as Int,
-                    successMessage = (restored[15] as String).takeIf { it.isNotBlank() },
-                    errorMessage = (restored[16] as String).takeIf { it.isNotBlank() }
+                    absentCount = restored[12] as Int,
+                    unmarkedCount = restored[13] as Int,
+                    successMessage = (restored[14] as String).takeIf { it.isNotBlank() },
+                    errorMessage = (restored[15] as String).takeIf { it.isNotBlank() }
                 )
             }
         )
@@ -138,12 +131,11 @@ data class AttendanceStudentUi(
 
 data class AttendanceSummary(
     val presentCount: Int,
-    val lateCount: Int,
     val absentCount: Int,
     val unmarkedCount: Int
 ) {
     val registeredCount: Int
-        get() = presentCount + lateCount + absentCount
+        get() = presentCount + absentCount
 
     companion object {
         fun from(
@@ -155,10 +147,7 @@ data class AttendanceSummary(
             }
             return AttendanceSummary(
                 presentCount = statusValues.count { it == AttendanceStatus.PRESENT },
-                lateCount = statusValues.count { it == AttendanceStatus.LATE },
-                absentCount = statusValues.count {
-                    it == AttendanceStatus.ABSENT || it == AttendanceStatus.JUSTIFIED
-                },
+                absentCount = statusValues.count { it == AttendanceStatus.ABSENT },
                 unmarkedCount = statusValues.count { it == AttendanceStatus.UNMARKED }
             )
         }

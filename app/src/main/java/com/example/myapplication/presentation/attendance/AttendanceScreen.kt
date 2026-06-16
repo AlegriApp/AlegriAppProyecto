@@ -271,9 +271,7 @@ fun AttendanceScreen(
                         onStatusSelected = { studentId, status ->
                             when (status) {
                                 AttendanceStatus.PRESENT -> viewModel.onEvent(AttendanceEvent.MarkPresent(studentId))
-                                AttendanceStatus.LATE -> viewModel.onEvent(AttendanceEvent.MarkLate(studentId))
                                 AttendanceStatus.ABSENT -> viewModel.onEvent(AttendanceEvent.MarkAbsent(studentId))
-                                AttendanceStatus.JUSTIFIED -> viewModel.onEvent(AttendanceEvent.MarkJustified(studentId))
                                 AttendanceStatus.UNMARKED -> Unit
                             }
                         }

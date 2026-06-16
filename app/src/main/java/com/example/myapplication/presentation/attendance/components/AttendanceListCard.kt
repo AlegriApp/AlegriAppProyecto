@@ -109,7 +109,7 @@ private fun AttendanceListCardPreview() {
             registeredCount = 2,
             statusByStudent = mapOf(
                 1L to AttendanceStatus.PRESENT,
-                2L to AttendanceStatus.LATE
+                2L to AttendanceStatus.ABSENT
             ),
             onStatusSelected = { _, _ -> }
         )
