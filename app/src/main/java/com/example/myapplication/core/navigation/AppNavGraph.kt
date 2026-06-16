@@ -8,7 +8,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.myapplication.presentation.attendance.AttendanceScreenRoute
 import com.example.myapplication.presentation.grades.GradeDetailScreen
 import com.example.myapplication.presentation.grades.GradesScreenRoute
-import com.example.myapplication.presentation.home.HomeScreen
+import com.example.myapplication.presentation.home.HomeScreenRoute
 import com.example.myapplication.presentation.incidents.IncidentScreenRoute
 import com.example.myapplication.presentation.login.LoginScreenRoute
 
@@ -32,10 +32,16 @@ fun AppNavGraph() {
         }
 
         composable<Home> {
-            HomeScreen(
+            HomeScreenRoute(
                 onOpenAttendance = { navController.navigate(Attendance) },
                 onOpenGrades = { navController.navigate(Grades) },
-                onOpenIncidents = { navController.navigate(Incidents) }
+                onOpenIncidents = { navController.navigate(Incidents) },
+                onLogout = {
+                    navController.navigate(Login) {
+                        popUpTo(Home) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
             )
         }
 

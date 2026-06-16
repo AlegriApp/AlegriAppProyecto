@@ -19,6 +19,7 @@ object SupabaseConfig {
     const val PERIODOS_ACADEMICOS_TABLE = "periodos_academicos"
     const val CONFIGURACION_TELEGRAM_TABLE = "configuracion_telegram"
     const val ESTUDIANTE_CURSO_TABLE = "estudiante_curso"
+    const val DOCENTE_CURSO_TABLE = "docente_curso"
 
     /**
      * Select alineado con [alegriapp_create_tables_og.txt]: `estudiante_representante` no tiene
@@ -32,6 +33,10 @@ object SupabaseConfig {
 
     const val USUARIO_SELECT =
         "id,nombre,apellido,email,password_hash,rol_id,estado,ultimo_acceso,deleted_at,roles(nombre)"
+
+    const val DOCENTE_CURSO_SELECT =
+        "docente_id,curso_id,materia_id,es_tutor,estado,deleted_at," +
+            "cursos(id,nombre,paralelo,anio_lectivo,periodo_academico_id,estado)"
 
     /**
      * Select de incidentes para PULL. Trae solo columnas necesarias para mobile.

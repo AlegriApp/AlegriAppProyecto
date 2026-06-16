@@ -17,6 +17,7 @@ import com.example.myapplication.data.local.entity.StudentCourseEntity
 import com.example.myapplication.data.local.entity.StudentEntity
 import com.example.myapplication.data.local.entity.StudentRepresentativeEntity
 import com.example.myapplication.data.local.entity.TelegramConfigEntity
+import com.example.myapplication.data.local.entity.TeacherCourseEntity
 import com.example.myapplication.data.local.entity.TipoEvaluacionCatalogEntity
 import com.example.myapplication.data.local.entity.TipoIncidenteCatalogEntity
 
@@ -32,10 +33,11 @@ import com.example.myapplication.data.local.entity.TipoIncidenteCatalogEntity
         PeriodoAcademicoCatalogEntity::class,
         TipoIncidenteCatalogEntity::class,
         StudentCourseEntity::class,
+        TeacherCourseEntity::class,
         StudentRepresentativeEntity::class,
         TelegramConfigEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 /**

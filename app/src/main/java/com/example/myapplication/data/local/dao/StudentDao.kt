@@ -14,6 +14,15 @@ interface StudentDao {
     fun observeStudents(): Flow<List<StudentEntity>>
 
     @Query(
+        "SELECT DISTINCT s.* FROM students s " +
+            "INNER JOIN student_courses sc ON sc.student_id = s.id " +
+            "INNER JOIN teacher_courses tc ON tc.course_id = sc.course_id " +
+            "WHERE tc.teacher_id = :teacherId AND s.is_deleted = 0 " +
+            "ORDER BY s.fullName ASC"
+    )
+    fun observeStudentsForTeacher(teacherId: Long): Flow<List<StudentEntity>>
+
+    @Query(
         "SELECT s.* FROM students s " +
             "INNER JOIN student_courses sc ON sc.student_id = s.id " +
             "WHERE sc.course_id = :courseId AND s.is_deleted = 0 " +
