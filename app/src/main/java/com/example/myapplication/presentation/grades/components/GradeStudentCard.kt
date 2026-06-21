@@ -89,7 +89,7 @@ private fun GradeStudentCardPreview() {
             student = GradeStudentMock(
                 id = 1L,
                 name = "Estudiante",
-                score = 18,
+                score = 9,
                 status = GradeVisualStatus.APPROVED
             ),
             onOpenDetail = {},

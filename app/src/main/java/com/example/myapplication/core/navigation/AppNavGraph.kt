@@ -12,7 +12,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.example.myapplication.core.di.AppModule
 import com.example.myapplication.presentation.attendance.AttendanceScreenRoute
-import com.example.myapplication.presentation.grades.GradeDetailScreen
+import com.example.myapplication.presentation.grades.GradeDetailScreenRoute
 import com.example.myapplication.presentation.grades.GradesScreenRoute
 import com.example.myapplication.presentation.home.HomeScreenRoute
 import com.example.myapplication.presentation.incidents.IncidentScreenRoute
@@ -97,7 +97,7 @@ fun AppNavGraph() {
 
         composable<GradeDetail> { backStackEntry ->
             val route = backStackEntry.toRoute<GradeDetail>()
-            GradeDetailScreen(
+            GradeDetailScreenRoute(
                 studentId = route.studentId,
                 onBack = { navController.popBackStack() }
             )

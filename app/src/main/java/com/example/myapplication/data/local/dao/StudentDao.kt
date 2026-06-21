@@ -36,6 +36,10 @@ interface StudentDao {
     @Query("SELECT * FROM students WHERE id = :studentId AND is_deleted = 0 LIMIT 1")
     suspend fun getStudentById(studentId: Long): StudentEntity?
 
+    /** Observa un estudiante por su PK de forma reactiva (offline-first). */
+    @Query("SELECT * FROM students WHERE id = :studentId AND is_deleted = 0 LIMIT 1")
+    fun observeStudentById(studentId: Long): Flow<StudentEntity?>
+
     @Query("SELECT * FROM students WHERE uuid = :uuid LIMIT 1")
     suspend fun getByUuid(uuid: String): StudentEntity?
 

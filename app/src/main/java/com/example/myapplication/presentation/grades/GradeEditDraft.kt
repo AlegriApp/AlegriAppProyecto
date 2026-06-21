@@ -1,5 +1,7 @@
 package com.example.myapplication.presentation.grades
 
+import com.example.myapplication.core.common.GradeScale
+
 data class GradeEditDraft(
     val studentId: Long,
     val activityName: String = DEFAULT_ACTIVITY_NAME,
@@ -10,6 +12,7 @@ data class GradeEditDraft(
     companion object {
         const val DEFAULT_ACTIVITY_NAME = "Registro docente"
         const val DEFAULT_ACTIVITY_TYPE = "Manual"
-        const val DEFAULT_MAX_SCORE = 20.0
+        // Escala oficial sobre 10 (antes 20.0).
+        const val DEFAULT_MAX_SCORE = GradeScale.MAX_SCORE
     }
 }

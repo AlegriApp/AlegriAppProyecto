@@ -99,9 +99,10 @@ object DatabaseSeeder {
 
     private fun buildDemoGrades(): List<GradeEntity> {
         val grades = mutableListOf<GradeEntity>()
+        // Notas demo sobre 10 (escala oficial GradeScale.MAX_SCORE).
         demoStudents.forEach { student ->
-            grades += demoGrade(student.id, "Evaluación diagnóstica", 16.0, "Diagnóstica")
-            grades += demoGrade(student.id, "Trabajo en clase", 18.0, "Formativa")
+            grades += demoGrade(student.id, "Evaluación diagnóstica", 8.0, "Diagnóstica")
+            grades += demoGrade(student.id, "Trabajo en clase", 9.0, "Formativa")
         }
         return grades
     }
@@ -115,7 +116,7 @@ object DatabaseSeeder {
         studentId = studentId,
         description = description,
         score = score,
-        maxScore = 20.0,
+        maxScore = com.example.myapplication.core.common.GradeScale.MAX_SCORE,
         subjectName = "General",
         periodName = "Actual",
         evaluationTypeName = evaluationType,

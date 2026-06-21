@@ -2,6 +2,7 @@ package com.example.myapplication.presentation.grades
 
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
+import com.example.myapplication.core.common.GradeScale
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.core.network.NetworkMonitor
@@ -239,22 +240,26 @@ class GradesViewModel(
 
     private fun refreshDerivedMetrics() {
         val state = _uiState.value
+        // Todas las notas se normalizan a la escala oficial (sobre 10), sin importar
+        // cómo estén guardadas en Room/API. Así la UI nunca muestra /20.
         val gradesByStudent = gradeStore
             .groupBy { it.studentId }
-            .mapValues { (_, values) -> values.map { it.score }.average().takeIf { !it.isNaN() } ?: 0.0 }
+            .mapValues { (_, values) ->
+                values.map { GradeScale.normalize(it.score, it.maxScore) }
+                    .average().takeIf { !it.isNaN() } ?: 0.0
+            }
             .toMutableMap()
-        pendingEdits.values.forEach { draft -> gradesByStudent[draft.studentId] = draft.score }
-        val maxScore = pendingEdits.values.firstOrNull()?.maxScore
-            ?: gradeStore.firstOrNull()?.maxScore
-            ?: GradeEditDraft.DEFAULT_MAX_SCORE
+        pendingEdits.values.forEach { draft ->
+            gradesByStudent[draft.studentId] = GradeScale.normalize(draft.score, draft.maxScore)
+        }
         val updatedStudents = state.students.map { student ->
             val score = gradesByStudent[student.id]
             student.copy(
                 score = score?.toInt(),
-                maxScore = maxScore.toInt(),
+                maxScore = GradeScale.MAX_SCORE_INT,
                 status = when {
                     score == null -> GradeVisualStatus.NOT_REGISTERED
-                    score < 10.0 -> GradeVisualStatus.AT_RISK
+                    score < GradeScale.PASSING_GRADE -> GradeVisualStatus.AT_RISK
                     else -> GradeVisualStatus.APPROVED
                 }
             )
