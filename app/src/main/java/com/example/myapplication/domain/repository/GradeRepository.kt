@@ -4,6 +4,8 @@ import com.example.myapplication.domain.model.Grade
 import kotlinx.coroutines.flow.Flow
 
 interface GradeRepository {
+    /** Todas las calificaciones de un estudiante (para la pantalla de detalle). */
+    fun observeGradesByStudent(studentId: Long): Flow<List<Grade>>
     fun observeGradesBySubjectAndPeriod(subject: String, period: String): Flow<List<Grade>>
     fun observeGradesByCatalogFilters(
         courseId: Long,

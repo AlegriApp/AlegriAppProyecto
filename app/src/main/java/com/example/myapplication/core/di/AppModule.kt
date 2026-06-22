@@ -42,6 +42,7 @@ import com.example.myapplication.domain.repository.TelegramRepository
 import com.example.myapplication.domain.service.AttendanceTranscriptionService
 import com.example.myapplication.domain.usecase.attendance.GetAttendanceByDateUseCase
 import com.example.myapplication.domain.usecase.attendance.SaveAttendanceUseCase
+import com.example.myapplication.domain.usecase.grade.GetGradesByStudentUseCase
 import com.example.myapplication.domain.usecase.grade.GetGradesBySubjectAndPeriodUseCase
 import com.example.myapplication.domain.usecase.grade.SaveGradeUseCase
 import com.example.myapplication.domain.usecase.incidents.SaveIncidentUseCase
@@ -49,6 +50,7 @@ import com.example.myapplication.domain.usecase.incidents.SendIncidentReportUseC
 import com.example.myapplication.domain.usecase.incidents.SendPendingIncidentsUseCase
 import com.example.myapplication.domain.usecase.auth.LoginUseCase
 import com.example.myapplication.domain.usecase.ocr.RecognizeTextFromImageUseCase
+import com.example.myapplication.domain.usecase.student.GetStudentByIdUseCase
 import com.example.myapplication.domain.usecase.student.GetStudentsUseCase
 import com.example.myapplication.domain.usecase.telegram.SendParentTelegramUseCase
 import com.example.myapplication.domain.usecase.telegram.SendTelegramMessageUseCase
@@ -56,12 +58,23 @@ import com.example.myapplication.services.mlkit.TextRecognitionProcessor
 import com.example.myapplication.services.telegram.TelegramConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object AppModule {
+
+    /**
+     * Scope de aplicación para tareas de inicialización que NO deben bloquear el
+     * hilo que construye la base (antes se usaba `runBlocking`, mala práctica que
+     * congelaba el hilo llamante mientras se sembraba la BD). Usa [SupervisorJob]
+     * para que un fallo en una tarea no cancele las demás.
+     */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     @Volatile
     private var db: AppDatabase? = null
 
@@ -105,10 +118,13 @@ object AppModule {
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
                 .also { database ->
-                    runBlocking(Dispatchers.IO) {
+                    db = database
+                    // Siembra demo en segundo plano (no bloquea al llamante). Las
+                    // pantallas leen vía Flow, así que se refrescan solas cuando
+                    // la data demo queda insertada.
+                    appScope.launch {
                         DatabaseSeeder.seedIfEmpty(database)
                     }
-                    db = database
                 }
         }
 
@@ -230,6 +246,12 @@ object AppModule {
 
     fun provideGetGradesBySubjectAndPeriodUseCase(context: Context): GetGradesBySubjectAndPeriodUseCase =
         GetGradesBySubjectAndPeriodUseCase(provideGradeRepository(context))
+
+    fun provideGetGradesByStudentUseCase(context: Context): GetGradesByStudentUseCase =
+        GetGradesByStudentUseCase(provideGradeRepository(context))
+
+    fun provideGetStudentByIdUseCase(context: Context): GetStudentByIdUseCase =
+        GetStudentByIdUseCase(provideStudentRepository(context))
 
     fun provideSaveGradeUseCase(context: Context): SaveGradeUseCase =
         SaveGradeUseCase(provideGradeRepository(context))

@@ -7,9 +7,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.myapplication.R
 import com.example.myapplication.presentation.common.CatalogDropdown
 import com.example.myapplication.presentation.common.CatalogOption
 import com.example.myapplication.ui.theme.MyApplicationTheme
@@ -41,27 +43,27 @@ fun GradeFilterSection(
             color = MaterialTheme.colorScheme.onBackground
         )
         CatalogDropdown(
-            label = "Curso",
+            label = stringResource(R.string.grade_filter_course),
             options = courseOptions,
             selectedId = selectedCourseId,
             onSelected = onCourseSelected
         )
         CatalogDropdown(
-            label = "Materia",
+            label = stringResource(R.string.grade_filter_subject),
             options = subjectOptions,
             selectedId = selectedSubjectId,
             onSelected = onSubjectSelected,
             enabled = subjectOptions.isNotEmpty()
         )
         CatalogDropdown(
-            label = "Tipo de evaluación",
+            label = stringResource(R.string.grade_filter_evaluation_type),
             options = evaluationTypeOptions,
             selectedId = selectedEvaluationTypeId,
             onSelected = onEvaluationTypeSelected,
             enabled = evaluationTypeOptions.isNotEmpty()
         )
         CatalogDropdown(
-            label = "Periodo académico",
+            label = stringResource(R.string.grade_filter_period),
             options = periodOptions,
             selectedId = selectedPeriodId,
             onSelected = onPeriodSelected,

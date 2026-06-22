@@ -1,5 +1,7 @@
         package com.example.myapplication.presentation.grades.components
 
+import com.example.myapplication.core.common.GradeScale
+
 data class GradeDetailStudent(
     val id: Long,
     val fullName: String,
@@ -17,7 +19,7 @@ data class GradeDetailSubject(
     val id: Long,
     val name: String,
     val average: Double,
-    val maxScore: Int = 20,
+    val maxScore: Int = GradeScale.MAX_SCORE_INT,
     val status: GradeVisualStatus,
     val entries: List<GradeDetailEntry>
 )
@@ -36,7 +38,7 @@ val gradeDetailMockStudent = GradeDetailStudent(
     fullName = "María González Pérez",
     course = "5to Grado - Sección A",
     period = "1er Lapso 2026",
-    generalAverage = 17.4,
+    generalAverage = 8.7,
     status = GradeVisualStatus.APPROVED,
     approvedSubjects = 3,
     atRiskSubjects = 1,
@@ -45,29 +47,29 @@ val gradeDetailMockStudent = GradeDetailStudent(
         GradeDetailSubject(
             id = 1L,
             name = "Matemáticas",
-            average = 18.5,
+            average = 9.3,
             status = GradeVisualStatus.APPROVED,
             entries = listOf(
                 GradeDetailEntry(
                     id = 1L,
                     activity = "Examen escrito",
-                    score = 19.0,
-                    maxScore = 20,
+                    score = 9.5,
+                    maxScore = GradeScale.MAX_SCORE_INT,
                     date = "12 May 2026",
                     teacherComment = "Excelente manejo de operaciones combinadas."
                 ),
                 GradeDetailEntry(
                     id = 2L,
                     activity = "Tarea: fracciones",
-                    score = 18.0,
-                    maxScore = 20,
+                    score = 9.0,
+                    maxScore = GradeScale.MAX_SCORE_INT,
                     date = "06 May 2026"
                 ),
                 GradeDetailEntry(
                     id = 3L,
                     activity = "Participación en clase",
-                    score = 18.5,
-                    maxScore = 20,
+                    score = 9.3,
+                    maxScore = GradeScale.MAX_SCORE_INT,
                     date = "02 May 2026",
                     teacherComment = "Participa de forma constante."
                 )
@@ -76,22 +78,22 @@ val gradeDetailMockStudent = GradeDetailStudent(
         GradeDetailSubject(
             id = 2L,
             name = "Lengua",
-            average = 17.0,
+            average = 8.5,
             status = GradeVisualStatus.APPROVED,
             entries = listOf(
                 GradeDetailEntry(
                     id = 4L,
                     activity = "Ensayo: lectura crítica",
-                    score = 17.0,
-                    maxScore = 20,
+                    score = 8.5,
+                    maxScore = GradeScale.MAX_SCORE_INT,
                     date = "10 May 2026",
                     teacherComment = "Buen análisis, mejorar la ortografía."
                 ),
                 GradeDetailEntry(
                     id = 5L,
                     activity = "Dictado",
-                    score = 16.5,
-                    maxScore = 20,
+                    score = 8.3,
+                    maxScore = GradeScale.MAX_SCORE_INT,
                     date = "03 May 2026"
                 )
             )
@@ -99,14 +101,14 @@ val gradeDetailMockStudent = GradeDetailStudent(
         GradeDetailSubject(
             id = 3L,
             name = "Ciencias",
-            average = 18.0,
+            average = 9.0,
             status = GradeVisualStatus.APPROVED,
             entries = listOf(
                 GradeDetailEntry(
                     id = 6L,
                     activity = "Proyecto: ecosistemas",
-                    score = 18.0,
-                    maxScore = 20,
+                    score = 9.0,
+                    maxScore = GradeScale.MAX_SCORE_INT,
                     date = "14 May 2026",
                     teacherComment = "Trabajo creativo y bien fundamentado."
                 )
@@ -115,22 +117,22 @@ val gradeDetailMockStudent = GradeDetailStudent(
         GradeDetailSubject(
             id = 4L,
             name = "Estudios Sociales",
-            average = 12.0,
+            average = 6.0,
             status = GradeVisualStatus.AT_RISK,
             entries = listOf(
                 GradeDetailEntry(
                     id = 7L,
                     activity = "Examen parcial",
-                    score = 11.0,
-                    maxScore = 20,
+                    score = 5.5,
+                    maxScore = GradeScale.MAX_SCORE_INT,
                     date = "11 May 2026",
                     teacherComment = "Requiere repaso del Tema 2."
                 ),
                 GradeDetailEntry(
                     id = 8L,
                     activity = "Mapa histórico",
-                    score = 13.0,
-                    maxScore = 20,
+                    score = 6.5,
+                    maxScore = GradeScale.MAX_SCORE_INT,
                     date = "04 May 2026"
                 )
             )

@@ -1,5 +1,6 @@
 package com.example.myapplication.services.telegram
 
+import com.example.myapplication.core.common.GradeScale
 import com.example.myapplication.domain.model.Attendance
 import com.example.myapplication.domain.model.AttendanceStatus
 import com.example.myapplication.domain.model.Incident
@@ -69,7 +70,7 @@ object TelegramMessageBuilder {
         lines: List<GradeActivityLine>
     ): String {
         val average = lines.map { it.score }.average().takeIf { !it.isNaN() } ?: 0.0
-        val maxScore = lines.maxOfOrNull { it.maxScore } ?: 20.0
+        val maxScore = lines.maxOfOrNull { it.maxScore } ?: GradeScale.MAX_SCORE
         return buildString {
             appendLine("AlegriAPP - Calificaciones de su representado/a")
             appendLine("Estudiante: ${sanitize(student.fullName)}")

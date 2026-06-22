@@ -11,6 +11,11 @@ import kotlinx.coroutines.flow.map
 class GradeRepositoryImpl(
     private val gradeDao: GradeDao
 ) : GradeRepository {
+    override fun observeGradesByStudent(studentId: Long): Flow<List<Grade>> =
+        gradeDao.observeGradesByStudent(studentId).map { entities ->
+            entities.map { it.toDomain() }
+        }
+
     override fun observeGradesBySubjectAndPeriod(subject: String, period: String): Flow<List<Grade>> =
         gradeDao.observeGradesBySubjectAndPeriod(subject, period).map { entities ->
             entities.map { it.toDomain() }

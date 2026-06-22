@@ -29,6 +29,9 @@ class StudentRepositoryImpl(
     override fun observeStudentsByCourse(courseId: Long): Flow<List<Student>> =
         studentDao.observeStudentsByCourse(courseId).map { it.toDomainList() }
 
+    override fun observeStudentById(studentId: Long): Flow<Student?> =
+        studentDao.observeStudentById(studentId).map { it?.toDomain() }
+
     override suspend fun upsertStudents(students: List<Student>) {
         if (students.isEmpty()) return
         val entities = students.map { student ->

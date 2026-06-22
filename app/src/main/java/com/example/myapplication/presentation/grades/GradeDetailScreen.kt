@@ -30,17 +30,20 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.myapplication.core.di.AppModule
 import com.example.myapplication.presentation.grades.components.GradeDetailEmptyState
 import com.example.myapplication.presentation.grades.components.GradeDetailErrorState
 import com.example.myapplication.presentation.grades.components.GradeDetailHeaderCard
@@ -50,36 +53,72 @@ import com.example.myapplication.presentation.grades.components.GradeDetailOffli
 import com.example.myapplication.presentation.grades.components.GradeDetailStudent
 import com.example.myapplication.presentation.grades.components.GradeSummaryCard
 import com.example.myapplication.presentation.grades.components.GradeSummaryIcons
-import com.example.myapplication.presentation.grades.components.findMockDetailById
 import com.example.myapplication.presentation.grades.components.gradeDetailMockStudent
 import com.example.myapplication.ui.theme.MyApplicationTheme
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Punto de entrada de producción del detalle de calificaciones.
+ *
+ * Crea el [GradeDetailViewModel] con la DI manual del proyecto ([AppModule]) y
+ * observa el estado real (Room/offline-first). Reemplaza el flujo mock anterior.
+ */
+@Composable
+fun GradeDetailScreenRoute(
+    studentId: Long,
+    onBack: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val viewModel: GradeDetailViewModel = viewModel(
+        key = "grade_detail_$studentId",
+        factory = viewModelFactory {
+            initializer {
+                GradeDetailViewModel(
+                    studentId = studentId,
+                    getStudentByIdUseCase = AppModule.provideGetStudentByIdUseCase(context),
+                    getGradesByStudentUseCase = AppModule.provideGetGradesByStudentUseCase(context),
+                    networkMonitor = AppModule.provideNetworkMonitor(context),
+                    syncRepository = AppModule.provideSyncRepository(context)
+                )
+            }
+        }
+    )
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    GradeDetailContent(
+        uiState = uiState,
+        onBack = onBack,
+        onRetry = viewModel::refresh,
+        onSyncNow = viewModel::refresh
+    )
+}
+
+/**
+ * Versión "tonta" (stateless) para @Preview y tests: renderiza un estado fijo
+ * sin ViewModel. No carga datos mock; solo dibuja el [GradeDetailUiState] dado.
+ */
 @Composable
 fun GradeDetailScreen(
     studentId: Long,
     onBack: () -> Unit = {},
     initialState: GradeDetailUiState? = null
 ) {
-    var uiState by remember(studentId) {
-        mutableStateOf<GradeDetailUiState>(initialState ?: GradeDetailUiState.Loading)
-    }
+    GradeDetailContent(
+        uiState = initialState ?: GradeDetailUiState.Loading,
+        onBack = onBack
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GradeDetailContent(
+    uiState: GradeDetailUiState,
+    onBack: () -> Unit,
+    onRetry: () -> Unit = {},
+    onSyncNow: () -> Unit = {}
+) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-
-    LaunchedEffect(studentId) {
-        if (initialState != null) return@LaunchedEffect
-        uiState = GradeDetailUiState.Loading
-        delay(500)
-        val mock = findMockDetailById(studentId)
-        uiState = if (mock == null) {
-            GradeDetailUiState.Empty
-        } else {
-            GradeDetailUiState.Success(student = mock, isFromCache = false)
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -122,15 +161,11 @@ fun GradeDetailScreen(
         ) {
             when (val state = uiState) {
                 GradeDetailUiState.Loading -> GradeDetailLoadingState()
-                GradeDetailUiState.Empty -> GradeDetailEmptyState(
-                    onRetry = { uiState = GradeDetailUiState.Loading }
-                )
-                GradeDetailUiState.Offline -> GradeDetailOfflineState(
-                    onRetry = { uiState = GradeDetailUiState.Loading }
-                )
+                GradeDetailUiState.Empty -> GradeDetailEmptyState(onRetry = onRetry)
+                GradeDetailUiState.Offline -> GradeDetailOfflineState(onRetry = onRetry)
                 is GradeDetailUiState.Error -> GradeDetailErrorState(
                     message = state.message,
-                    onRetry = { uiState = GradeDetailUiState.Loading }
+                    onRetry = onRetry
                 )
                 is GradeDetailUiState.Success -> GradeDetailSuccessContent(
                     student = state.student,
@@ -143,10 +178,9 @@ fun GradeDetailScreen(
                         }
                     },
                     onSyncNow = {
+                        onSyncNow()
                         scope.launch {
-                            snackbarHostState.showSnackbar(
-                                "Prototipo visual: sincronización pendiente"
-                            )
+                            snackbarHostState.showSnackbar("Sincronizando con el servidor…")
                         }
                     }
                 )

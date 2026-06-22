@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.myapplication.core.common.GradeScale
 import com.example.myapplication.ui.theme.MyApplicationTheme
 
 @Composable
@@ -103,7 +104,7 @@ fun GradeDetailHeaderCard(
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = "/ 20",
+                    text = "/ ${GradeScale.MAX_SCORE_INT}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

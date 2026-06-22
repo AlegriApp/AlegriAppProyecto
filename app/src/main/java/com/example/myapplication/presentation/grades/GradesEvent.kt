@@ -1,6 +1,7 @@
 package com.example.myapplication.presentation.grades
 
 import android.net.Uri
+import com.example.myapplication.core.common.GradeScale
 
 sealed interface    GradesEvent {
     data object LoadData : GradesEvent
@@ -13,7 +14,7 @@ sealed interface    GradesEvent {
         val activityName: String,
         val activityType: String,
         val score: Double,
-        val maxScore: Double = 20.0
+        val maxScore: Double = GradeScale.MAX_SCORE
     ) : GradesEvent
     data object RefreshAverages : GradesEvent
     data class OpenDetail(val studentId: Long) : GradesEvent
