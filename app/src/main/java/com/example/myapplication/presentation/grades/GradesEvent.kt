@@ -1,0 +1,28 @@
+package com.example.myapplication.presentation.grades
+
+import android.net.Uri
+import com.example.myapplication.core.common.GradeScale
+
+sealed interface    GradesEvent {
+    data object LoadData : GradesEvent
+    data class CourseSelected(val courseId: Long) : GradesEvent
+    data class SubjectSelected(val subjectId: Long) : GradesEvent
+    data class EvaluationTypeSelected(val evaluationTypeId: Long) : GradesEvent
+    data class PeriodSelected(val periodId: Long) : GradesEvent
+    data class EditGrade(
+        val studentId: Long,
+        val activityName: String,
+        val activityType: String,
+        val score: Double,
+        val maxScore: Double = GradeScale.MAX_SCORE
+    ) : GradesEvent
+    data object RefreshAverages : GradesEvent
+    data class OpenDetail(val studentId: Long) : GradesEvent
+    data class OcrImageSelected(val uri: Uri) : GradesEvent
+    data object ApplyOcrSuggestions : GradesEvent
+    data class OpenEditDialog(val studentId: Long) : GradesEvent
+    data object DismissEditDialog : GradesEvent
+    data object SaveGrades : GradesEvent
+    data object SendBulletinClicked : GradesEvent
+    data object ClearMessages : GradesEvent
+}

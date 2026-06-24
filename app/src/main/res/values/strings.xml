@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">My Application</string>
+
+    <!-- Etiquetas de filtros del módulo de calificaciones -->
+    <string name="grade_filter_course">Curso</string>
+    <string name="grade_filter_subject">Asignatura</string>
+    <string name="grade_filter_evaluation_type">Tipo de evaluación</string>
+    <string name="grade_filter_period">Periodo académico</string>
+</resources>
