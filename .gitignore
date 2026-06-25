@@ -13,3 +13,31 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# --- Secretos y credenciales (NUNCA versionar) ---
+*.keystore
+*.jks
+*.p12
+*.properties.secret
+secrets.properties
+google-services.json
+
+# --- Artefactos de compilación ---
+**/build/
+*.apk
+*.aab
+*.ap_
+*.aar
+*.dex
+*.class
+compile_log.txt
+*.hprof
+
+# --- Kotlin / Gradle ---
+.kotlin/
+
+# --- IDE / SO ---
+.idea/
+.vscode/
+desktop.ini
+Thumbs.db
